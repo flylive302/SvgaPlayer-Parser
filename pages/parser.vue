@@ -18,11 +18,10 @@
 </template>
 <script setup lang="ts">
 import {useSvgaParser} from "~/composables/useSvgaParser";
-import SvgaPlayer from "~/components/common/SvgaPlayer.vue";
 
-const outPutFilename = '7';
+const outPutFilename = '8';
 
-const asset = '/svga/7.svga';
+const asset = '/svga/8.svga';
 const parsedSvga = ref({});
 
 onMounted(async () => {
