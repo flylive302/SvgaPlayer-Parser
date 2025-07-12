@@ -10,7 +10,7 @@
         <br>
         <br>
 
-        <SvgaPlayer name="1" width="auto" height="auto" :loop="1" />
+        <SvgaPlayer name="frame_2" width="auto" height="auto" :loop="0" />
     </div>
 </template>
 <script setup lang="ts">

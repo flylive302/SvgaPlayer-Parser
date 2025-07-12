@@ -20,12 +20,12 @@
 import {useSvgaParser} from "~/composables/useSvgaParser";
 import SvgaPlayer from "~/components/common/SvgaPlayer.vue";
 
-const outPutFilename = '4';
+const outPutFilename = '7';
 
-const asset = '/svga/4.svga';
+const asset = '/svga/7.svga';
 const parsedSvga = ref({});
 
 onMounted(async () => {
-    // parsedSvga.value = await useSvgaParser(asset, outPutFilename);
+    parsedSvga.value = await useSvgaParser(asset, outPutFilename);
 })
 </script>
