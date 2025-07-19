@@ -10,7 +10,7 @@
         <br>
         <br>
 
-        <SvgaPlayer name="vip8" width="50%" height="auto" :loop="0" />
+        <SvgaPlayer name="mice_wave_1" width="50%" height="auto" :loop="0" />
     </div>
 </template>
 <script setup lang="ts">
