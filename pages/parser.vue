@@ -19,9 +19,9 @@
 <script setup lang="ts">
 import {useSvgaParser} from "~/composables/useSvgaParser";
 
-const outPutFilename = 'entry_8';
+const outPutFilename = 'vip1';
 
-const asset = '/svga/entry_8.svga';
+const asset = '/svga/vip1.svga';
 const parsedSvga = ref({});
 
 onMounted(async () => {
