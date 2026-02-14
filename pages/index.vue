@@ -10,7 +10,8 @@
         <br>
         <br>
 
-        <SvgaPlayer name="entry_1" width="50%" height="auto" :loop="0" />
+        <SvgaPlayer name="slide" width="70%" height="auto" :loop="0" />
+        <SvgaPlayer name="card" width="70%" height="auto" :loop="0" />
     </div>
 </template>
 <script setup lang="ts">

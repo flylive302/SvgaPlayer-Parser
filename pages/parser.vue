@@ -19,12 +19,15 @@
 <script setup lang="ts">
 import {useSvgaParser} from "~/composables/useSvgaParser";
 
-const outPutFilename = 'vip1';
+const outPutFilenameA = 'slide';
+const outPutFilenameB = 'card';
 
-const asset = '/svga/vip1.svga';
+const assetA = '/svga/vip/2/slide2.svga';
+const assetB = '/svga/vip/2/vip2.svga';
 const parsedSvga = ref({});
 
 onMounted(async () => {
-    parsedSvga.value = await useSvgaParser(asset, outPutFilename);
+    parsedSvga.value = await useSvgaParser(assetA, outPutFilenameA);
+    parsedSvga.value = await useSvgaParser(assetB, outPutFilenameB);
 })
 </script>
