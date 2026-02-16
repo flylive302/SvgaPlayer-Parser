@@ -26,7 +26,7 @@
         <div class="preview-container">
           <video
             :src="`/api/preview/webm/${assetName}/playable.webm`"
-            autoplay loop muted playsinline
+            autoplay loop controls playsinline
             class="preview-video"
             @error="videoError = true"
           ></video>
@@ -309,8 +309,8 @@ onMounted(loadAsset)
 }
 
 .preview-video {
-  max-width: 400px;
-  max-height: 300px;
+  max-width: auto;
+  max-height: auto;
   border-radius: var(--radius-md);
   background: repeating-conic-gradient(#1a1a2e 0% 25%, #16162a 0% 50%) 50% / 20px 20px;
 }
@@ -323,8 +323,8 @@ onMounted(loadAsset)
 }
 
 .preview-thumb {
-  width: 120px;
-  height: 120px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: var(--radius-md);
   background: var(--bg-tertiary);

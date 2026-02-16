@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       video_name:
-        description: "Name of the gift (used for output path)"
+        description: "Name of the asset (used for output path)"
         required: true
         type: string
       alpha_side:
@@ -18,13 +18,16 @@ on:
         required: false
         type: boolean
         default: false
-      gift_type:
-        description: "Gift category"
-        required: true
-        type: choice
-        options:
-          - vip
-          - normal
+      cdn_path:
+        description: "CDN upload path (e.g. room/gifts/vip-gifts)"
+        required: false
+        type: string
+        default: "/"
+      skip_webm:
+        description: "Skip WebM encoding (already done locally)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   encode-and-upload:
@@ -41,21 +44,24 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install wrangler
-        run: npm install -g wrangler
-
-      - name: Download raw video
+      - name: Check raw video exists
         run: |
-          echo "⚠️  Place your raw MP4 in raw/ before triggering this workflow."
-          echo "   Or upload via the GUI and commit to the repo."
-          ls -la raw/ || echo "No raw/ directory found"
+          if [ ! -f "raw/${{ inputs.video_name }}.mp4" ]; then
+            echo "❌ Error: raw/${{ inputs.video_name }}.mp4 not found."
+            echo "   Commit your raw MP4 to the raw/ directory first."
+            exit 1
+          fi
+          echo "✅ Found raw/${{ inputs.video_name }}.mp4"
+          ls -lh "raw/${{ inputs.video_name }}.mp4"
 
       - name: Encode WebM (VP9 + Alpha)
+        if: ${{ !inputs.skip_webm }}
         run: |
           INVERT_FLAG=""
           if [ "${{ inputs.invert }}" = "true" ]; then
             INVERT_FLAG="--invert"
           fi
+          chmod +x ./scripts/encode-webm.sh
           ./scripts/encode-webm.sh \
             -i "raw/${{ inputs.video_name }}.mp4" \
             -o "output/webm/${{ inputs.video_name }}/playable.webm" \
@@ -68,6 +74,7 @@ jobs:
           if [ "${{ inputs.invert }}" = "true" ]; then
             INVERT_FLAG="--invert"
           fi
+          chmod +x ./scripts/encode-hevc.sh
           ./scripts/encode-hevc.sh \
             -i "raw/${{ inputs.video_name }}.mp4" \
             -o "output/hevc/${{ inputs.video_name }}/playable.mov" \
@@ -86,10 +93,43 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          ./scripts/upload-r2.sh \
-            --name "${{ inputs.video_name }}" \
-            --type "${{ inputs.gift_type }}"
+          NAME="${{ inputs.video_name }}"
+          CDN_PATH="${{ inputs.cdn_path }}"
+          # Trim trailing slash
+          CDN_PATH="${CDN_PATH%/}"
+          [ "$CDN_PATH" = "" ] && CDN_PATH=""
+
+          BUCKET="${R2_BUCKET_NAME}"
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${BUCKET}/objects"
+
+          upload_file() {
+            local FILE="$1"
+            local REMOTE="$2"
+            echo "  ☁️  Uploading $FILE → $REMOTE"
+            curl -s -X PUT "${API}/${REMOTE}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${FILE}"
+          }
+
+          # Upload WebM
+          if [ -f "output/webm/${NAME}/playable.webm" ]; then
+            upload_file "output/webm/${NAME}/playable.webm" "${CDN_PATH}/${NAME}/playable.webm"
+          fi
+
+          # Upload HEVC
+          if [ -f "output/hevc/${NAME}/playable.mov" ]; then
+            upload_file "output/hevc/${NAME}/playable.mov" "${CDN_PATH}/${NAME}/playable.mov"
+          fi
+
+          # Upload Thumbnail
+          if [ -f "output/webm/${NAME}/thumbnail.png" ]; then
+            upload_file "output/webm/${NAME}/thumbnail.png" "${CDN_PATH}/${NAME}/thumbnail.png"
+          fi
+
+          echo "✅ All files uploaded to R2"
 
       - name: Update asset manifest
         run: |
@@ -100,29 +140,45 @@ jobs:
           if (fs.existsSync(path)) manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
 
           const name = '${{ inputs.video_name }}';
-          const type = '${{ inputs.gift_type }}';
-          const prefix = type === 'vip' ? 'room/gifts/vip-gifts' : 'room/gifts/normal';
+          const cdnPath = '${{ inputs.cdn_path }}'.replace(/^\/|\/$/g, '');
+          const prefix = cdnPath || name;
 
           // Remove existing entry
           manifest.assets = manifest.assets.filter(a => a.name !== name);
           manifest.assets.push({
             name,
-            type,
+            assetType: 'video',
             formats: {
               webm: prefix + '/' + name + '/playable.webm',
               hevc: prefix + '/' + name + '/playable.mov'
             },
             thumbnail: prefix + '/' + name + '/thumbnail.png',
-            encoded_at: new Date().toISOString()
+            encoded_at: new Date().toISOString(),
+            cdn_urls: []
           });
           manifest.generated_at = new Date().toISOString();
           fs.writeFileSync(path, JSON.stringify(manifest, null, 2));
           "
 
-      - name: Commit manifest
+      - name: Commit outputs & manifest
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add assets.json
-          git diff --cached --quiet || git commit -m "chore: update asset manifest for ${{ inputs.video_name }}"
+          git add assets.json output/
+          git diff --cached --quiet || git commit -m "chore: encode ${{ inputs.video_name }} (WebM + HEVC)"
           git push
+
+      - name: Summary
+        run: |
+          echo "## ✅ Encoding Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Asset | File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|------|" >> $GITHUB_STEP_SUMMARY
+          if [ -f "output/webm/${{ inputs.video_name }}/playable.webm" ]; then
+            SIZE=$(du -h "output/webm/${{ inputs.video_name }}/playable.webm" | cut -f1)
+            echo "| WebM | playable.webm | $SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "output/hevc/${{ inputs.video_name }}/playable.mov" ]; then
+            SIZE=$(du -h "output/hevc/${{ inputs.video_name }}/playable.mov" | cut -f1)
+            echo "| HEVC | playable.mov | $SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi

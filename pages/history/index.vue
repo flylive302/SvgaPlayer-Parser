@@ -37,6 +37,7 @@
       <table class="asset-table">
         <thead>
           <tr>
+            <th style="width:64px">Preview</th>
             <th>Name</th>
             <th>Formats</th>
             <th>Encoded</th>
@@ -47,8 +48,36 @@
         <tbody>
           <tr v-for="asset in currentAssets" :key="asset.name" class="asset-row">
             <td>
+              <div class="thumb-cell">
+                <!-- Video: show thumbnail image or inline video -->
+                <img
+                  v-if="activeTab === 'video' && asset.thumbnail"
+                  :src="asset.thumbnail"
+                  class="table-thumb"
+                  alt=""
+                />
+                <video
+                  v-else-if="activeTab === 'video'"
+                  :src="`/api/preview/webm/${asset.name}/playable.webm`"
+                  class="table-thumb"
+                  muted
+                  loop
+                  playsinline
+                  @mouseenter="($event.target as HTMLVideoElement).play()"
+                  @mouseleave="($event.target as HTMLVideoElement).pause()"
+                />
+                <!-- SVGA: show custom thumbnail or emoji -->
+                <img
+                  v-else-if="activeTab === 'svga' && asset.thumbnail"
+                  :src="asset.thumbnail"
+                  class="table-thumb"
+                  alt=""
+                />
+                <span v-else class="table-thumb-fallback">✨</span>
+              </div>
+            </td>
+            <td>
               <div class="asset-name-cell">
-                <span class="asset-icon">{{ activeTab === 'video' ? '🎬' : '✨' }}</span>
                 <span class="asset-name-text">{{ asset.name }}</span>
               </div>
             </td>
@@ -222,15 +251,38 @@ onMounted(loadAssets)
   gap: 10px;
 }
 
-.asset-icon {
-  font-size: 1.2rem;
-}
-
 .asset-name-text {
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.85rem;
+}
+
+.thumb-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-thumb {
+  max-width: 240px;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.table-thumb-fallback {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
 }
 
 .format-chips {

@@ -1,5 +1,34 @@
 {
   "version": 1,
-  "generated_at": "2026-02-16T10:09:35.266Z",
-  "assets": []
+  "generated_at": "2026-02-16T16:33:10.761Z",
+  "assets": [
+    {
+      "name": "tiger",
+      "cdnPath": "/gift",
+      "assetType": "video",
+      "encoded_at": "2026-02-16T16:31:20.154Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/gift/tiger/playable.webm",
+        "https://assets.flyliveapp.com/gift/tiger/thumbnail.png"
+      ],
+      "formats": {
+        "webm": "gift/tiger/playable.webm"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/gift/tiger/thumbnail.png"
+    },
+    {
+      "name": "zhaiyue",
+      "cdnPath": "/slides",
+      "assetType": "svga",
+      "encoded_at": "2026-02-16T16:33:10.761Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/slides/zhaiyue/zhaiyue.json",
+        "https://assets.flyliveapp.com/slides/zhaiyue/thumbnail.png"
+      ],
+      "formats": {
+        "json": "slides/zhaiyue/zhaiyue.json"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/slides/zhaiyue/thumbnail.png"
+    }
+  ]
 }
