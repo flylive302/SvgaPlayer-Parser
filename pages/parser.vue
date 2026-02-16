@@ -22,8 +22,10 @@ import {useSvgaParser} from "~/composables/useSvgaParser";
 const outPutFilenameA = 'slide';
 const outPutFilenameB = 'card';
 
-const assetA = '/svga/vip/2/slide2.svga';
-const assetB = '/svga/vip/2/vip2.svga';
+let X = 3;
+
+const assetA = '/svga/vip/'+ X +'/slide'+ X +'.svga';
+const assetB = '/svga/vip/'+ X +'/vip'+ X +'.svga';
 const parsedSvga = ref({});
 
 onMounted(async () => {
