@@ -1,5 +1,6 @@
 // server/api/process.post.ts
 // Triggers encoding via shell scripts (encode-webm.sh) or SVGA parsing
+import { defineEventHandler, readBody } from 'h3'
 import { execSync } from 'child_process'
 import { join } from 'path'
 import { existsSync } from 'fs'

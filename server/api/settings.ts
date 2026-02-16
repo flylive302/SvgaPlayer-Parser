@@ -1,5 +1,6 @@
 // server/api/settings.ts
 // GET: Load settings from .env, POST: Save settings to .env
+import { defineEventHandler, getMethod, readBody } from 'h3'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 

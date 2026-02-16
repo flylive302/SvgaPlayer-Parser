@@ -42,7 +42,7 @@
         <div class="empty-state-icon">📭</div>
         <div class="empty-state-text">No assets processed yet</div>
         <div class="empty-state-hint">
-          Go to <NuxtLink to="/upload" style="color:var(--accent-blue)">Upload & Process</NuxtLink> to get started
+          Go to <NuxtLink to="/video" style="color:var(--accent-blue)">Video Converter</NuxtLink> or <NuxtLink to="/svga" style="color:var(--accent-violet)">SVGA Converter</NuxtLink> to get started
         </div>
       </div>
 

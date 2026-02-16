@@ -15,9 +15,23 @@
         <span class="nav-icon">📊</span>
         <span>Dashboard</span>
       </NuxtLink>
-      <NuxtLink to="/upload" class="nav-item" :class="{active: route.path === '/upload'}">
-        <span class="nav-icon">📤</span>
-        <span>Upload & Process</span>
+
+      <div class="nav-section-label">Converters</div>
+
+      <NuxtLink to="/video" class="nav-item" :class="{active: route.path === '/video'}">
+        <span class="nav-icon">🎬</span>
+        <span>Video (MP4)</span>
+      </NuxtLink>
+      <NuxtLink to="/svga" class="nav-item" :class="{active: route.path === '/svga'}">
+        <span class="nav-icon">✨</span>
+        <span>SVGA</span>
+      </NuxtLink>
+
+      <div class="nav-section-label">Management</div>
+
+      <NuxtLink to="/history" class="nav-item" :class="{active: route.path.startsWith('/history')}">
+        <span class="nav-icon">📁</span>
+        <span>History</span>
       </NuxtLink>
       <NuxtLink to="/settings" class="nav-item" :class="{active: route.path === '/settings'}">
         <span class="nav-icon">⚙️</span>
@@ -30,14 +44,14 @@
         <span class="status-dot" :class="isLinux ? 'pending' : 'success'"></span>
         <span>{{ isLinux ? 'Linux (WebM only)' : 'macOS (Full)' }}</span>
       </div>
-      <div class="sidebar-version">v1.0.0</div>
+      <div class="sidebar-version">v2.0.0</div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 const route = useRoute()
-const isLinux = ref(true) // Will be detected server-side
+const isLinux = ref(true)
 </script>
 
 <style scoped>
@@ -97,7 +111,17 @@ const isLinux = ref(true) // Will be detected server-side
   padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+}
+
+.nav-section-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 16px 14px 6px;
+  opacity: 0.6;
 }
 
 .nav-item {
@@ -111,6 +135,7 @@ const isLinux = ref(true) // Will be detected server-side
   font-size: 0.9rem;
   font-weight: 500;
   transition: all var(--transition-fast);
+  position: relative;
 }
 
 .nav-item:hover {

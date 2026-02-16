@@ -1,6 +1,6 @@
 // server/api/upload.post.ts
 // Handles file upload: saves raw MP4/SVGA to raw/ directory
-import { readMultipartFormData } from 'h3'
+import { defineEventHandler, readMultipartFormData } from 'h3'
 import { writeFile, mkdir } from 'fs/promises'
 import { join, extname } from 'path'
 

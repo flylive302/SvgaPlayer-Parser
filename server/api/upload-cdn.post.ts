@@ -1,13 +1,14 @@
 // server/api/upload-cdn.post.ts
-// Uploads processed assets to Cloudflare R2 or ImageKit
-import { execSync } from 'child_process'
-import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
+// Uploads processed assets to Cloudflare R2 (S3 API) or ImageKit (REST API)
+// Supports separate CDN targets for asset vs thumbnail, and custom cdnPath
+import { defineEventHandler, readBody } from 'h3'
+import { join, extname } from 'path'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { writeFile } from 'fs/promises'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { name, type, provider, path: cdnPath } = body
+  const { name, provider, thumbProvider, cdnPath, assetType } = body
 
   if (!name || !provider) {
     return { success: false, error: 'Missing name or provider' }
@@ -15,135 +16,299 @@ export default defineEventHandler(async (event) => {
 
   const cwd = process.cwd()
   const outputDir = join(cwd, 'output')
+  // Normalize cdnPath: ensure it starts with / and no trailing /
+  const normalizedPath = normalizeCdnPath(cdnPath || '/')
 
-  if (provider === 'r2') {
-    return await uploadToR2(name, type || 'normal', cwd, outputDir)
-  } else if (provider === 'imagekit') {
-    return await uploadToImageKit(name, type || 'normal', cwd, outputDir, cdnPath)
+  // Collect files
+  const { assetFiles, thumbnailFiles } = collectFiles(outputDir, name, normalizedPath, assetType || 'video')
+
+  const results: string[] = []
+  const urls: string[] = []
+
+  // Upload asset files to the asset provider
+  for (const f of assetFiles) {
+    const result = await uploadFile(f, provider, cwd)
+    results.push(result.msg)
+    if (result.url) urls.push(result.url)
   }
 
-  return { success: false, error: `Unknown provider: ${provider}` }
+  // Upload thumbnail files to the thumbnail provider (may be same or different)
+  const effectiveThumbProvider = thumbProvider || provider
+  for (const f of thumbnailFiles) {
+    const result = await uploadFile(f, effectiveThumbProvider, cwd)
+    results.push(result.msg)
+    if (result.url) urls.push(result.url)
+  }
+
+  // Update manifest
+  await updateManifest(cwd, name, normalizedPath, assetType || 'video', urls)
+
+  return {
+    success: results.some(r => r.startsWith('✅')),
+    log: results.join('\n'),
+    urls,
+  }
 })
 
-async function uploadToR2(name: string, type: string, cwd: string, outputDir: string) {
-  const scriptPath = join(cwd, 'scripts', 'upload-r2.sh')
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-  if (!existsSync(scriptPath)) {
-    return { success: false, error: 'upload-r2.sh not found' }
-  }
+function normalizeCdnPath(p: string): string {
+  let clean = p.trim().replace(/\/+/g, '/').replace(/\/$/, '')
+  if (!clean.startsWith('/')) clean = '/' + clean
+  if (clean === '') clean = '/'
+  return clean
+}
 
+// ── Load credentials from .env ────────────────────────────────────────────
+function loadEnvVar(cwd: string, key: string): string {
+  if (process.env[key]) return process.env[key] as string
+
+  const envPath = join(cwd, '.env')
+  if (!existsSync(envPath)) return ''
+
+  const content = readFileSync(envPath, 'utf-8')
+  const regex = new RegExp(key + '="?([^"\\n]+)"?')
+  const match = content.match(regex)
+  return match ? match[1].trim() : ''
+}
+
+// ── Collect files to upload ──────────────────────────────────────────────
+interface UploadFile {
+  local: string
+  remote: string
+  ct: string
+}
+
+function findThumbnail(dir: string): { filename: string, ext: string } | null {
+  if (!existsSync(dir)) return null
   try {
-    // Check if wrangler is available
-    execSync('command -v wrangler', { encoding: 'utf-8' })
-  } catch {
-    return {
-      success: false,
-      error: 'wrangler CLI not installed. Run: npm install -g wrangler && wrangler login'
+    const files = readdirSync(dir)
+    const thumb = files.find(f => f.startsWith('thumbnail.'))
+    if (thumb) {
+      return { filename: thumb, ext: extname(thumb) }
     }
-  }
+  } catch { /* ignore */ }
+  return null
+}
 
-  try {
-    const cmd = `bash "${scriptPath}" --name "${name}" --type "${type}" --output-dir "${outputDir}"`
-    const log = execSync(cmd, {
-      cwd,
-      timeout: 120000,
-      encoding: 'utf-8',
-      env: { ...process.env }
+function getContentType(ext: string): string {
+  const map: Record<string, string> = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif',
+    '.svg': 'image/svg+xml', '.json': 'application/json',
+    '.webm': 'video/webm', '.mov': 'video/quicktime',
+  }
+  return map[ext] || 'application/octet-stream'
+}
+
+function collectFiles(
+  outputDir: string,
+  name: string,
+  cdnPath: string,
+  assetType: string
+): { assetFiles: UploadFile[], thumbnailFiles: UploadFile[] } {
+  // cdnPath like "/" or "/room/gifts/vip" — build remote prefix
+  const prefix = cdnPath === '/' ? name : `${cdnPath.slice(1)}/${name}`
+
+  const assetFiles: UploadFile[] = []
+  const thumbnailFiles: UploadFile[] = []
+
+  if (assetType === 'svga') {
+    const svgaDir = join(outputDir, 'svga', name)
+    assetFiles.push({
+      local: join(svgaDir, `${name}.json`),
+      remote: `${prefix}/${name}.json`,
+      ct: 'application/json',
     })
 
-    // Update assets.json manifest
-    await updateManifest(cwd, name, type)
-
-    return { success: true, log }
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message || 'R2 upload failed',
-      log: err.stdout || err.stderr || ''
+    // Check for thumbnail
+    const thumb = findThumbnail(svgaDir)
+    if (thumb) {
+      thumbnailFiles.push({
+        local: join(svgaDir, thumb.filename),
+        remote: `${prefix}/${thumb.filename}`,
+        ct: getContentType(thumb.ext),
+      })
     }
+  } else {
+    // Video (webm)
+    const webmDir = join(outputDir, 'webm', name)
+    assetFiles.push({
+      local: join(webmDir, 'playable.webm'),
+      remote: `${prefix}/playable.webm`,
+      ct: 'video/webm',
+    })
+
+    // Check for thumbnail (any format)
+    const thumb = findThumbnail(webmDir)
+    if (thumb) {
+      thumbnailFiles.push({
+        local: join(webmDir, thumb.filename),
+        remote: `${prefix}/${thumb.filename}`,
+        ct: getContentType(thumb.ext),
+      })
+    }
+  }
+
+  return { assetFiles, thumbnailFiles }
+}
+
+// ── Upload a single file ─────────────────────────────────────────────────
+async function uploadFile(
+  f: UploadFile,
+  provider: string,
+  cwd: string
+): Promise<{ msg: string, url?: string }> {
+  if (!existsSync(f.local)) {
+    return { msg: `⚠️ Skipped (not found): ${f.remote}` }
+  }
+
+  if (provider === 'r2') {
+    return await uploadFileToR2(f, cwd)
+  } else if (provider === 'imagekit') {
+    return await uploadFileToImageKit(f, cwd)
+  }
+
+  return { msg: `❌ Unknown provider: ${provider}` }
+}
+
+// ── R2 Upload ────────────────────────────────────────────────────────────
+async function uploadFileToR2(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
+  const accountId = loadEnvVar(cwd, 'CLOUDFLARE_ACCOUNT_ID')
+  const apiToken = loadEnvVar(cwd, 'CLOUDFLARE_API_TOKEN')
+  const bucket = loadEnvVar(cwd, 'R2_BUCKET_NAME') || 'flylive-assets'
+  const customDomain = loadEnvVar(cwd, 'R2_CUSTOM_DOMAIN')
+
+  if (!accountId || !apiToken) {
+    return { msg: '❌ Cloudflare Account ID or API Token not configured. Go to Settings.' }
+  }
+
+  try {
+    const fileBuffer = readFileSync(f.local)
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects/${f.remote}`
+
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': f.ct,
+      },
+      body: new Uint8Array(fileBuffer),
+    })
+
+    if (resp.ok) {
+      const cdnUrl = customDomain ? `${customDomain}/${f.remote}` : f.remote
+      return { msg: `✅ R2: ${f.remote}`, url: cdnUrl }
+    } else {
+      const errText = await resp.text()
+      return { msg: `❌ R2 ${f.remote}: ${resp.status} ${resp.statusText} — ${errText}` }
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { msg: `❌ R2 ${f.remote}: ${msg}` }
   }
 }
 
-async function uploadToImageKit(name: string, type: string, cwd: string, outputDir: string, cdnPath?: string) {
-  // Load ImageKit settings from .env
-  const envPath = join(cwd, '.env')
-  let privateKey = process.env.IMAGEKIT_PRIVATE_KEY || ''
-
-  if (!privateKey && existsSync(envPath)) {
-    const envContent = readFileSync(envPath, 'utf-8')
-    const match = envContent.match(/IMAGEKIT_PRIVATE_KEY=(.+)/)
-    if (match) privateKey = match[1].trim()
-  }
+// ── ImageKit Upload ──────────────────────────────────────────────────────
+async function uploadFileToImageKit(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
+  const privateKey = loadEnvVar(cwd, 'IMAGEKIT_PRIVATE_KEY')
+  const urlEndpoint = loadEnvVar(cwd, 'IMAGEKIT_URL_ENDPOINT')
 
   if (!privateKey) {
-    return { success: false, error: 'ImageKit private key not configured. Go to Settings.' }
+    return { msg: '❌ ImageKit private key not configured. Go to Settings.' }
   }
 
-  const files = [
-    { local: join(outputDir, 'webm', name, 'playable.webm'), remote: `${cdnPath || name}/playable.webm` },
-    { local: join(outputDir, 'webm', name, 'thumbnail.png'), remote: `${cdnPath || name}/thumbnail.png` },
-  ]
+  try {
+    const fileBuffer = readFileSync(f.local)
+    const base64 = fileBuffer.toString('base64')
 
-  const results = []
-  for (const f of files) {
-    if (!existsSync(f.local)) continue
+    const folder = '/' + f.remote.split('/').slice(0, -1).join('/')
+    const fileName = f.remote.split('/').pop() || f.remote
 
-    try {
-      const fileBuffer = readFileSync(f.local)
-      const base64 = fileBuffer.toString('base64')
+    const formBody = new URLSearchParams()
+    formBody.append('file', base64)
+    formBody.append('fileName', fileName)
+    formBody.append('folder', folder)
+    formBody.append('useUniqueFileName', 'false')
 
-      const resp = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(privateKey + ':').toString('base64'),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          file: base64,
-          fileName: f.remote.split('/').pop(),
-          folder: '/' + f.remote.split('/').slice(0, -1).join('/')
-        })
-      })
+    const resp = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(privateKey + ':').toString('base64'),
+      },
+      body: formBody,
+    })
 
-      if (resp.ok) {
-        results.push(`✅ ${f.remote}`)
-      } else {
-        results.push(`❌ ${f.remote}: ${resp.statusText}`)
-      }
-    } catch (err: any) {
-      results.push(`❌ ${f.remote}: ${err.message}`)
+    if (resp.ok) {
+      const data = await resp.json() as Record<string, unknown>
+      const cdnUrl = (data.url as string) || `${urlEndpoint}/${f.remote}`
+      return { msg: `✅ ImageKit: ${f.remote}`, url: cdnUrl }
+    } else {
+      const errText = await resp.text()
+      return { msg: `❌ ImageKit ${f.remote}: ${resp.status} — ${errText}` }
     }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { msg: `❌ ImageKit ${f.remote}: ${msg}` }
   }
-
-  await updateManifest(cwd, name, type)
-
-  return { success: true, log: results.join('\n') }
 }
 
-async function updateManifest(cwd: string, name: string, type: string) {
+// ── Manifest ─────────────────────────────────────────────────────────────
+interface ManifestEntry {
+  name: string
+  cdnPath: string
+  assetType: string
+  encoded_at: string
+  cdn_urls: string[]
+  formats: Record<string, string>
+  thumbnail?: string
+}
+
+interface Manifest {
+  version: number
+  generated_at: string
+  assets: ManifestEntry[]
+}
+
+async function updateManifest(cwd: string, name: string, cdnPath: string, assetType: string, urls: string[]) {
   const manifestPath = join(cwd, 'assets.json')
-  let manifest = { version: 1, generated_at: '', assets: [] as any[] }
+  let manifest: Manifest = { version: 1, generated_at: '', assets: [] }
 
   if (existsSync(manifestPath)) {
     try {
-      manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-    } catch { /* ignore parse errors */ }
+      manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Manifest
+    } catch (_e) { /* ignore malformed JSON */ }
   }
 
-  const prefix = type === 'vip' ? 'room/gifts/vip-gifts' : 'room/gifts/normal'
+  const prefix = cdnPath === '/' ? name : `${cdnPath.slice(1)}/${name}`
 
-  // Remove existing entry
-  manifest.assets = manifest.assets.filter((a: any) => a.name !== name)
-  manifest.assets.push({
+  // Remove existing entry with same name
+  manifest.assets = manifest.assets.filter(a => a.name !== name)
+
+  const entry: ManifestEntry = {
     name,
-    type,
-    formats: {
-      webm: `${prefix}/${name}/playable.webm`,
-      hevc: `${prefix}/${name}/playable.mov`
-    },
-    thumbnail: `${prefix}/${name}/thumbnail.png`,
-    encoded_at: new Date().toISOString()
-  })
+    cdnPath,
+    assetType,
+    encoded_at: new Date().toISOString(),
+    cdn_urls: urls,
+    formats: {},
+  }
+
+  if (assetType === 'svga') {
+    entry.formats = { json: `${prefix}/${name}.json` }
+  } else {
+    entry.formats = {
+      webm: `${prefix}/playable.webm`,
+    }
+  }
+
+  // Find thumbnail URL from uploaded URLs
+  const thumbUrl = urls.find(u => u.includes('thumbnail'))
+  if (thumbUrl) {
+    entry.thumbnail = thumbUrl
+  }
+
+  manifest.assets.push(entry)
   manifest.generated_at = new Date().toISOString()
 
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
