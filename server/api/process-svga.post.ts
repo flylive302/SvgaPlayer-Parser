@@ -373,12 +373,6 @@ export default defineEventHandler(async (event) => {
     const jsonString = JSON.stringify(videoData)
     await writeFile(jsonPath, jsonString)
 
-    // Save individual images as PNG files (for preview/thumbnails)
-    for (const [key, base64] of Object.entries(imagesMap)) {
-      const imgPath = join(outDir, `${key}.png`)
-      await writeFile(imgPath, Buffer.from(base64, 'base64'))
-    }
-
     const stats = {
       frames: videoData.frames,
       viewBoxWidth: videoData.size.width,
