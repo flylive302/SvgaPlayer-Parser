@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "generated_at": "2026-02-16T07:43:49.813Z",
+  "assets": [
+    {
+      "name": "1",
+      "type": "normal",
+      "formats": {
+        "webm": "room/gifts/normal/1/playable.webm",
+        "hevc": "room/gifts/normal/1/playable.mov"
+      },
+      "thumbnail": "room/gifts/normal/1/thumbnail.png",
+      "encoded_at": "2026-02-16T07:34:41.388Z"
+    },
+    {
+      "name": "testGift",
+      "type": "normal",
+      "formats": {
+        "webm": "room/gifts/normal/testGift/playable.webm",
+        "hevc": "room/gifts/normal/testGift/playable.mov"
+      },
+      "thumbnail": "room/gifts/normal/testGift/thumbnail.png",
+      "encoded_at": "2026-02-16T07:39:48.832Z"
+    },
+    {
+      "name": "NewTest",
+      "type": "normal",
+      "formats": {
+        "webm": "room/gifts/normal/NewTest/playable.webm",
+        "hevc": "room/gifts/normal/NewTest/playable.mov"
+      },
+      "thumbnail": "room/gifts/normal/NewTest/thumbnail.png",
+      "encoded_at": "2026-02-16T07:43:49.813Z"
+    }
+  ]
+}

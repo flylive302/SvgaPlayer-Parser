@@ -1,0 +1,128 @@
+name: Encode & Upload Assets
+on:
+  workflow_dispatch:
+    inputs:
+      video_name:
+        description: "Name of the gift (used for output path)"
+        required: true
+        type: string
+      alpha_side:
+        description: "Which half contains the alpha matte"
+        required: true
+        type: choice
+        options:
+          - right
+          - left
+      invert:
+        description: "Invert the alpha matte"
+        required: false
+        type: boolean
+        default: false
+      gift_type:
+        description: "Gift category"
+        required: true
+        type: choice
+        options:
+          - vip
+          - normal
+
+jobs:
+  encode-and-upload:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Download raw video
+        run: |
+          echo "⚠️  Place your raw MP4 in raw/ before triggering this workflow."
+          echo "   Or upload via the GUI and commit to the repo."
+          ls -la raw/ || echo "No raw/ directory found"
+
+      - name: Encode WebM (VP9 + Alpha)
+        run: |
+          INVERT_FLAG=""
+          if [ "${{ inputs.invert }}" = "true" ]; then
+            INVERT_FLAG="--invert"
+          fi
+          ./scripts/encode-webm.sh \
+            -i "raw/${{ inputs.video_name }}.mp4" \
+            -o "output/webm/${{ inputs.video_name }}/playable.webm" \
+            --alpha-side "${{ inputs.alpha_side }}" \
+            $INVERT_FLAG
+
+      - name: Encode HEVC (VideoToolbox + Alpha)
+        run: |
+          INVERT_FLAG=""
+          if [ "${{ inputs.invert }}" = "true" ]; then
+            INVERT_FLAG="--invert"
+          fi
+          ./scripts/encode-hevc.sh \
+            -i "raw/${{ inputs.video_name }}.mp4" \
+            -o "output/hevc/${{ inputs.video_name }}/playable.mov" \
+            --alpha-side "${{ inputs.alpha_side }}" \
+            $INVERT_FLAG
+
+      - name: Generate Thumbnail
+        run: |
+          ffmpeg -y -hide_banner -loglevel warning \
+            -i "raw/${{ inputs.video_name }}.mp4" \
+            -ss 1 -frames:v 1 \
+            -vf "scale=512:512:force_original_aspect_ratio=decrease" \
+            "output/webm/${{ inputs.video_name }}/thumbnail.png"
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ./scripts/upload-r2.sh \
+            --name "${{ inputs.video_name }}" \
+            --type "${{ inputs.gift_type }}"
+
+      - name: Update asset manifest
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = 'assets.json';
+          let manifest = { version: 1, generated_at: '', assets: [] };
+          if (fs.existsSync(path)) manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+          const name = '${{ inputs.video_name }}';
+          const type = '${{ inputs.gift_type }}';
+          const prefix = type === 'vip' ? 'room/gifts/vip-gifts' : 'room/gifts/normal';
+
+          // Remove existing entry
+          manifest.assets = manifest.assets.filter(a => a.name !== name);
+          manifest.assets.push({
+            name,
+            type,
+            formats: {
+              webm: prefix + '/' + name + '/playable.webm',
+              hevc: prefix + '/' + name + '/playable.mov'
+            },
+            thumbnail: prefix + '/' + name + '/thumbnail.png',
+            encoded_at: new Date().toISOString()
+          });
+          manifest.generated_at = new Date().toISOString();
+          fs.writeFileSync(path, JSON.stringify(manifest, null, 2));
+          "
+
+      - name: Commit manifest
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add assets.json
+          git diff --cached --quiet || git commit -m "chore: update asset manifest for ${{ inputs.video_name }}"
+          git push

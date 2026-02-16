@@ -1,0 +1,6 @@
+name = "flylive-asset-pipeline"
+compatibility_date = "2025-02-16"
+
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "flylive-assets"

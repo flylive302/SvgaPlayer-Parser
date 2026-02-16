@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@lottiefiles/dotlottie-vue": "^0.8.1",
+    "@types/formidable": "^3.4.6",
+    "formidable": "^3.5.4",
     "nuxt": "^3.16.0",
     "svga": "^2.1.1",
     "vue": "^3.5.13",

@@ -22,3 +22,14 @@ logs
 .env
 .env.*
 !.env.example
+
+# Raw input videos (large, not committed)
+raw/*.mp4
+raw/*.mov
+raw/*.MP4
+
+# Encoded output (uploaded to R2, not committed)
+output/
+
+# Wrangler
+.wrangler/
