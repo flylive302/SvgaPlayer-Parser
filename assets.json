@@ -1,57 +1,15 @@
 {
   "version": 1,
-  "generated_at": "2026-02-17T10:11:38.747Z",
+  "generated_at": "2026-02-17T10:49:23.327Z",
   "assets": [
     {
-      "name": "tiger",
-      "cdnPath": "/gift",
+      "name": "Elephan Castle",
       "assetType": "video",
-      "encoded_at": "2026-02-16T16:31:20.154Z",
-      "cdn_urls": [
-        "https://assets.flyliveapp.com/gift/tiger/playable.webm",
-        "https://assets.flyliveapp.com/gift/tiger/thumbnail.png"
-      ],
-      "formats": {
-        "webm": "gift/tiger/playable.webm"
-      },
-      "thumbnail": "https://assets.flyliveapp.com/gift/tiger/thumbnail.png"
-    },
-    {
-      "name": "zhaiyue",
-      "cdnPath": "/slides",
-      "assetType": "svga",
-      "encoded_at": "2026-02-16T16:33:10.761Z",
-      "cdn_urls": [
-        "https://assets.flyliveapp.com/slides/zhaiyue/zhaiyue.json",
-        "https://assets.flyliveapp.com/slides/zhaiyue/thumbnail.png"
-      ],
-      "formats": {
-        "json": "slides/zhaiyue/zhaiyue.json"
-      },
-      "thumbnail": "https://assets.flyliveapp.com/slides/zhaiyue/thumbnail.png"
-    },
-    {
-      "name": "Slide100",
-      "assetType": "svga",
-      "encoded_at": "2026-02-16T19:05:27.385Z",
+      "encoded_at": "2026-02-17T10:49:23.327Z",
       "cdn_urls": [],
       "formats": {
-        "json": "Slide100/Slide100.json"
+        "webm": "Elephan Castle/playable.webm"
       }
-    },
-    {
-      "name": "suite",
-      "cdnPath": "/",
-      "assetType": "video",
-      "encoded_at": "2026-02-17T10:11:38.747Z",
-      "cdn_urls": [
-        "https://assets.flyliveapp.com/suite/playable.webm",
-        "https://assets.flyliveapp.com/suite/thumbnail.jpg"
-      ],
-      "formats": {
-        "webm": "suite/playable.webm"
-      },
-      "thumbnail": "https://assets.flyliveapp.com/suite/thumbnail.jpg"
     }
   ]
 }
