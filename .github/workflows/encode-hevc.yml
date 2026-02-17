@@ -54,6 +54,7 @@ jobs:
           ffmpeg -y -hide_banner -loglevel info \
             -i tmp/input.webm \
             -c:v hevc_videotoolbox \
+            -allow_sw 1 \
             -alpha_quality 0.75 \
             -tag:v hvc1 \
             -map 0:a? -c:a aac -b:a 128k \
