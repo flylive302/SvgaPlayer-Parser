@@ -70,6 +70,8 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
           R2_CUSTOM_DOMAIN: ${{ secrets.R2_CUSTOM_DOMAIN }}
         run: |
+          npm install -g wrangler
+
           NAME="${{ inputs.asset_name }}"
           CDN_PATH="${{ inputs.cdn_path }}"
           CDN_PATH="${CDN_PATH%/}"
@@ -78,13 +80,13 @@ jobs:
           REMOTE_KEY="${CDN_PATH}/${NAME}/playable.mov"
           [ -z "$CDN_PATH" ] && REMOTE_KEY="${NAME}/playable.mov"
 
-          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${R2_BUCKET_NAME}/objects"
+          LOCAL_FILE="output/hevc/${NAME}/playable.mov"
 
           echo "☁️  Uploading to R2: ${REMOTE_KEY}"
-          curl -s -X PUT "${API}/${REMOTE_KEY}" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: video/quicktime" \
-            --data-binary "@output/hevc/${NAME}/playable.mov"
+          wrangler r2 object put "${R2_BUCKET_NAME}/${REMOTE_KEY}" \
+            --file "$LOCAL_FILE" \
+            --content-type "video/quicktime" \
+            --remote
 
           HEVC_URL="${R2_CUSTOM_DOMAIN}/${REMOTE_KEY}"
           echo "✅ Uploaded: ${HEVC_URL}"

@@ -381,7 +381,7 @@ onMounted(loadAsset)
 }
 
 .preview-video {
-  max-width: auto;
+  max-width: 250px;
   max-height: auto;
   border-radius: var(--radius-md);
   background: repeating-conic-gradient(#1a1a2e 0% 25%, #16162a 0% 50%) 50% / 20px 20px;
@@ -395,7 +395,7 @@ onMounted(loadAsset)
 }
 
 .preview-thumb {
-  width: auto;
+  width: 200px;
   height: auto;
   object-fit: contain;
   border-radius: var(--radius-md);

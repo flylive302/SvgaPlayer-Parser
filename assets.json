@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-02-17T10:49:23.327Z",
+  "generated_at": "2026-02-17T21:00:53.434Z",
   "assets": [
     {
       "name": "Elephan Castle",
@@ -10,6 +10,29 @@
       "formats": {
         "webm": "Elephan Castle/playable.webm"
       }
+    },
+    {
+      "name": "barbie kent",
+      "assetType": "video",
+      "encoded_at": "2026-02-17T10:53:54.482Z",
+      "cdn_urls": [],
+      "formats": {
+        "webm": "barbie kent/playable.webm"
+      }
+    },
+    {
+      "name": "RoyalCouple",
+      "cdnPath": "/",
+      "assetType": "video",
+      "encoded_at": "2026-02-17T21:00:53.434Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/RoyalCouple/playable.webm",
+        "https://assets.flyliveapp.com/RoyalCouple/thumbnail.png"
+      ],
+      "formats": {
+        "webm": "RoyalCouple/playable.webm"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/RoyalCouple/thumbnail.png"
     }
   ]
 }
