@@ -135,6 +135,42 @@
         <div v-if="uploadLog" class="log-output" style="margin-top:12px">{{ uploadLog }}</div>
       </div>
 
+      <!-- HEVC Encoding Card -->
+      <div class="card" style="margin-bottom:24px">
+        <h2 class="card-title" style="margin-bottom:16px">🍎 iOS HEVC Encoding</h2>
+
+        <div v-if="!hasWebmOnCdn" style="color:var(--text-muted); font-size:0.85rem; padding:12px 0">
+          Upload WebM to CDN first, then you can trigger HEVC encoding for iOS.
+        </div>
+
+        <div v-else>
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:16px">
+            Triggers a macOS GitHub Actions runner to download the WebM from CDN, encode to HEVC with alpha, and upload the <code>.mov</code> back to CDN.
+          </p>
+
+          <div class="cdn-config-row" style="margin-bottom:16px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Upload HEVC to</label>
+              <select v-model="hevcCdnTarget" class="form-select">
+                <option value="r2">Cloudflare R2</option>
+                <option value="imagekit">ImageKit</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-lg" @click="triggerHevcEncode" :disabled="triggeringHevc">
+            <span v-if="triggeringHevc" class="spinner" style="width:14px;height:14px;border-width:2px"></span>
+            {{ triggeringHevc ? 'Triggering...' : '🍎 Encode HEVC for iOS' }}
+          </button>
+
+          <div v-if="hevcLog" class="log-output" style="margin-top:12px">{{ hevcLog }}</div>
+
+          <a v-if="hevcActionsUrl" :href="hevcActionsUrl" target="_blank" class="btn btn-sm" style="margin-top:8px">
+            📋 View on GitHub Actions →
+          </a>
+        </div>
+      </div>
+
       <!-- Actions Card -->
       <div class="card" style="margin-bottom:24px">
         <h2 class="card-title" style="margin-bottom:16px">Actions</h2>
@@ -189,6 +225,16 @@ const cdnTarget = ref<'r2' | 'imagekit'>('r2')
 const thumbCdnTarget = ref<'r2' | 'imagekit'>('r2')
 const customThumbnail = ref(false)
 const thumbnailPreviewUrl = ref('')
+
+// HEVC encoding
+const hevcCdnTarget = ref<'r2' | 'imagekit'>('r2')
+const triggeringHevc = ref(false)
+const hevcLog = ref('')
+const hevcActionsUrl = ref('')
+const hasWebmOnCdn = computed(() => {
+  if (!asset.value?.cdn_urls) return false
+  return (asset.value.cdn_urls as string[]).some((u: string) => u.endsWith('.webm'))
+})
 
 const loadAsset = async () => {
   loading.value = true
@@ -268,6 +314,32 @@ const uploadToCdn = async () => {
     addToast?.('error', err.message || 'CDN upload failed')
   }
   uploading.value = false
+}
+
+const triggerHevcEncode = async () => {
+  triggeringHevc.value = true
+  hevcLog.value = ''
+  hevcActionsUrl.value = ''
+  try {
+    const res = await $fetch<{success: boolean, message: string, actionsUrl?: string}>('/api/trigger-hevc', {
+      method: 'POST',
+      body: {
+        assetName: assetName.value,
+        cdnProvider: hevcCdnTarget.value,
+        cdnPath: cdnPath.value || '/',
+      }
+    })
+    hevcLog.value = res.message
+    if (res.actionsUrl) hevcActionsUrl.value = res.actionsUrl
+    if (res.success) {
+      addToast?.('success', 'HEVC encoding triggered on GitHub Actions!')
+    }
+  } catch (err: any) {
+    const msg = err?.data?.message || err?.message || 'Failed to trigger HEVC encoding'
+    hevcLog.value = msg
+    addToast?.('error', msg)
+  }
+  triggeringHevc.value = false
 }
 
 const renameAsset = async () => {

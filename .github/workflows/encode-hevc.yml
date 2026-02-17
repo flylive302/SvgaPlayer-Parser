@@ -1,0 +1,138 @@
+name: Encode HEVC from WebM
+on:
+  workflow_dispatch:
+    inputs:
+      asset_name:
+        description: "Asset name"
+        required: true
+        type: string
+      webm_url:
+        description: "CDN URL of the WebM file (already has alpha channel)"
+        required: true
+        type: string
+      cdn_provider:
+        description: "CDN provider to upload the HEVC to"
+        required: true
+        type: choice
+        options:
+          - r2
+          - imagekit
+        default: r2
+      cdn_path:
+        description: "CDN upload path"
+        required: false
+        type: string
+        default: "/"
+
+jobs:
+  encode-hevc:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - name: Download WebM from CDN
+        run: |
+          mkdir -p tmp
+          echo "⬇️  Downloading WebM from: ${{ inputs.webm_url }}"
+          curl -fSL "${{ inputs.webm_url }}" -o tmp/input.webm
+          ls -lh tmp/input.webm
+
+      - name: Probe input
+        run: |
+          echo "📐 Input info:"
+          ffprobe -v error -show_entries stream=width,height,codec_name,pix_fmt \
+            -of default=noprint_wrappers=1 tmp/input.webm
+
+      - name: Encode HEVC with Alpha (VideoToolbox)
+        run: |
+          mkdir -p "output/hevc/${{ inputs.asset_name }}"
+          echo "⏳ Encoding HEVC with alpha via VideoToolbox..."
+          ffmpeg -y -hide_banner -loglevel info \
+            -i tmp/input.webm \
+            -c:v hevc_videotoolbox \
+            -alpha_quality 0.75 \
+            -tag:v hvc1 \
+            -map 0:a? -c:a aac -b:a 128k \
+            "output/hevc/${{ inputs.asset_name }}/playable.mov"
+          echo "✅ Encoded successfully"
+          ls -lh "output/hevc/${{ inputs.asset_name }}/playable.mov"
+
+      - name: Upload HEVC to R2
+        if: ${{ inputs.cdn_provider == 'r2' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_CUSTOM_DOMAIN: ${{ secrets.R2_CUSTOM_DOMAIN }}
+        run: |
+          NAME="${{ inputs.asset_name }}"
+          CDN_PATH="${{ inputs.cdn_path }}"
+          CDN_PATH="${CDN_PATH%/}"
+          CDN_PATH="${CDN_PATH#/}"
+
+          REMOTE_KEY="${CDN_PATH}/${NAME}/playable.mov"
+          [ -z "$CDN_PATH" ] && REMOTE_KEY="${NAME}/playable.mov"
+
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${R2_BUCKET_NAME}/objects"
+
+          echo "☁️  Uploading to R2: ${REMOTE_KEY}"
+          curl -s -X PUT "${API}/${REMOTE_KEY}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: video/quicktime" \
+            --data-binary "@output/hevc/${NAME}/playable.mov"
+
+          HEVC_URL="${R2_CUSTOM_DOMAIN}/${REMOTE_KEY}"
+          echo "✅ Uploaded: ${HEVC_URL}"
+          echo "HEVC_CDN_URL=${HEVC_URL}" >> $GITHUB_ENV
+
+      - name: Upload HEVC to ImageKit
+        if: ${{ inputs.cdn_provider == 'imagekit' }}
+        env:
+          IMAGEKIT_PRIVATE_KEY: ${{ secrets.IMAGEKIT_PRIVATE_KEY }}
+          IMAGEKIT_URL_ENDPOINT: ${{ secrets.IMAGEKIT_URL_ENDPOINT }}
+        run: |
+          NAME="${{ inputs.asset_name }}"
+          CDN_PATH="${{ inputs.cdn_path }}"
+          CDN_PATH="${CDN_PATH%/}"
+
+          FILE_PATH="output/hevc/${NAME}/playable.mov"
+          ENCODED=$(base64 -i "$FILE_PATH")
+          AUTH=$(echo -n "${IMAGEKIT_PRIVATE_KEY}:" | base64)
+
+          echo "☁️  Uploading to ImageKit: ${CDN_PATH}/${NAME}/playable.mov"
+          RESPONSE=$(curl -s -X POST "https://upload.imagekit.io/api/v1/files/upload" \
+            -H "Authorization: Basic ${AUTH}" \
+            -F "file=@${FILE_PATH}" \
+            -F "fileName=playable.mov" \
+            -F "folder=${CDN_PATH}/${NAME}")
+
+          URL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('url',''))" 2>/dev/null || echo "")
+          if [ -n "$URL" ]; then
+            echo "✅ Uploaded: ${URL}"
+            echo "HEVC_CDN_URL=${URL}" >> $GITHUB_ENV
+          else
+            echo "❌ Upload failed:"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "## ✅ HEVC Encoding Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Asset | ${{ inputs.asset_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Source | ${{ inputs.webm_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Provider | ${{ inputs.cdn_provider }} |" >> $GITHUB_STEP_SUMMARY
+          if [ -f "output/hevc/${{ inputs.asset_name }}/playable.mov" ]; then
+            SIZE=$(du -h "output/hevc/${{ inputs.asset_name }}/playable.mov" | cut -f1)
+            echo "| HEVC Size | $SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${HEVC_CDN_URL}" ]; then
+            echo "| CDN URL | ${HEVC_CDN_URL} |" >> $GITHUB_STEP_SUMMARY
+          fi

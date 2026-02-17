@@ -11,7 +11,9 @@ const ENV_KEYS = {
   r2Domain: 'R2_CUSTOM_DOMAIN',
   imagekitEndpoint: 'IMAGEKIT_URL_ENDPOINT',
   imagekitPublicKey: 'IMAGEKIT_PUBLIC_KEY',
-  imagekitPrivateKey: 'IMAGEKIT_PRIVATE_KEY'
+  imagekitPrivateKey: 'IMAGEKIT_PRIVATE_KEY',
+  githubPat: 'GITHUB_PAT',
+  githubRepo: 'GITHUB_REPO'
 } as Record<string, string>
 
 function getEnvPath() {
@@ -77,6 +79,9 @@ export default defineEventHandler(async (event) => {
     }
     if (result.imagekitPrivateKey) {
       result.imagekitPrivateKey = '••••' + result.imagekitPrivateKey.slice(-4)
+    }
+    if (result.githubPat) {
+      result.githubPat = '••••' + result.githubPat.slice(-4)
     }
 
     return result

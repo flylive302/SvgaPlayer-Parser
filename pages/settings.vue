@@ -1,8 +1,8 @@
 <template>
   <div>
     <div class="page-header">
-      <h1 class="page-title">CDN Settings</h1>
-      <p class="page-subtitle">Configure your Cloudflare R2 and ImageKit upload credentials</p>
+      <h1 class="page-title">CDN & GitHub Settings</h1>
+      <p class="page-subtitle">Configure your Cloudflare R2, ImageKit, and GitHub Actions credentials</p>
     </div>
 
     <!-- Cloudflare R2 -->
@@ -75,6 +75,36 @@
       </div>
     </div>
 
+    <!-- GitHub Actions -->
+    <div class="card settings-section">
+      <div class="settings-section-header">
+        <div class="settings-section-icon" style="background:rgba(110,84,148,0.15);color:#8b5cf6">🐙</div>
+        <div>
+          <div class="settings-section-title">GitHub Actions</div>
+          <div style="font-size:0.8rem; color:var(--text-muted)">Remote HEVC encoding on macOS runners</div>
+        </div>
+        <span
+          class="badge"
+          :class="githubConnected ? 'badge-emerald' : 'badge-rose'"
+          style="margin-left:auto"
+        >
+          {{ githubConnected ? 'Connected' : 'Not configured' }}
+        </span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="form-group">
+          <label class="form-label">Personal Access Token (PAT)</label>
+          <input v-model="settings.githubPat" class="form-input" placeholder="github_pat_..." type="password" />
+          <span class="form-hint">Generate at github.com/settings/tokens — needs Actions read/write</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Repository (owner/repo)</label>
+          <input v-model="settings.githubRepo" class="form-input" placeholder="flylive302/SvgaPlayer-Parser" />
+        </div>
+      </div>
+    </div>
+
     <!-- Save Button -->
     <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">
       <button class="btn btn-secondary" @click="loadSettings">
@@ -117,6 +147,8 @@ interface Settings {
   imagekitEndpoint: string
   imagekitPublicKey: string
   imagekitPrivateKey: string
+  githubPat: string
+  githubRepo: string
 }
 
 const addToast = inject<(type: string, msg: string) => void>('addToast')
@@ -129,11 +161,14 @@ const settings = ref<Settings>({
   r2Domain: 'https://assets.flyliveapp.com',
   imagekitEndpoint: '',
   imagekitPublicKey: '',
-  imagekitPrivateKey: ''
+  imagekitPrivateKey: '',
+  githubPat: '',
+  githubRepo: 'flylive302/SvgaPlayer-Parser'
 })
 
 const r2Connected = computed(() => !!settings.value.r2AccountId && !!settings.value.r2ApiToken)
 const imagekitConnected = computed(() => !!settings.value.imagekitPrivateKey && !!settings.value.imagekitEndpoint)
+const githubConnected = computed(() => !!settings.value.githubPat && !!settings.value.githubRepo)
 
 const loadSettings = async () => {
   try {
