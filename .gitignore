@@ -35,5 +35,10 @@ mp4-converter/
 # Encoded output (uploaded to R2, not committed)
 output/
 
+# SQLite database (contains credentials)
+*.db
+*.db-wal
+*.db-shm
+
 # Wrangler
 .wrangler/

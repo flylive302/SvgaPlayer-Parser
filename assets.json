@@ -29,6 +29,20 @@
         "webm": "loveBirds/playable.webm"
       },
       "thumbnail": "https://assets.flyliveapp.com/loveBirds/thumbnail.png"
+    },
+    {
+      "name": "plain",
+      "cdnPath": "/plain",
+      "assetType": "video",
+      "encoded_at": "2026-02-18T03:18:12.822Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/plain/plain/playable.webm",
+        "https://assets.flyliveapp.com/plain/plain/thumbnail.png"
+      ],
+      "formats": {
+        "webm": "plain/plain/playable.webm"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/plain/plain/thumbnail.png"
     }
   ]
 }

@@ -110,7 +110,15 @@
                     <button class="btn btn-secondary btn-sm" @click="item.showCdnUpload = !item.showCdnUpload">
                       ☁️ Upload to CDN {{ item.showCdnUpload ? '▲' : '▼' }}
                     </button>
-                    <NuxtLink to="/settings" class="btn btn-secondary btn-sm hevc-btn">🍎 iOS HEVC Setup</NuxtLink>
+                    <button
+                      v-if="item.cdnUrl"
+                      class="btn btn-sm hevc-btn"
+                      :disabled="item.hevcTriggered"
+                      @click="triggerHevc(item)"
+                    >
+                      {{ item.hevcTriggered ? '✅ HEVC Triggered' : '🍎 Encode HEVC (.mov)' }}
+                    </button>
+                    <NuxtLink v-else to="/settings" class="btn btn-secondary btn-sm hevc-btn">🍎 iOS HEVC Setup</NuxtLink>
                   </div>
 
                   <!-- Inline CDN Upload (expandable) -->
@@ -289,6 +297,7 @@ interface VideoItem {
   previewUrl: string; thumbnailUrl: string; downloadUrl: string;
   showCdnUpload: boolean; cdnProvider: string; cdnPath: string; cdnFilename: string;
   cdnUploading: boolean; cdnUrl: string;
+  hevcTriggered: boolean;
 }
 
 const videoInput = ref<HTMLInputElement>()
@@ -320,6 +329,7 @@ const addVideoFiles = (files: File[]) => {
       previewUrl: '', thumbnailUrl: '', downloadUrl: '',
       showCdnUpload: false, cdnProvider: 'r2', cdnPath: '/', cdnFilename: '',
       cdnUploading: false, cdnUrl: '',
+      hevcTriggered: false,
     })
     added++
   }
@@ -357,8 +367,15 @@ const processVideos = async () => {
       // Log to history
       try {
         await $fetch('/api/history', {
-          method: 'PATCH',
-          body: { id: 0 } // Will be handled by addHistoryEntry on server
+          method: 'POST',
+          body: {
+            name: item.outputName,
+            asset_type: 'video',
+            source_filename: item.originalName,
+            formats: { webm: true },
+            cdn_urls: [],
+            thumbnail_url: null,
+          },
         })
       } catch { /* non-critical */ }
 
@@ -445,6 +462,21 @@ const processSvgas = async () => {
       item.downloadUrl = `/api/preview/svga/${item.outputName}/${item.outputName}.json`
       item.parsed = true; item.progress = 100; item.progressText = 'Parsing complete!'; item.status = 'done'
 
+      // Log to history
+      try {
+        await $fetch('/api/history', {
+          method: 'POST',
+          body: {
+            name: item.outputName,
+            asset_type: 'svga',
+            source_filename: item.originalName,
+            formats: { json: true },
+            cdn_urls: [],
+            thumbnail_url: null,
+          },
+        })
+      } catch { /* non-critical */ }
+
       addToast?.('success', `${item.outputName} parsed!`)
     } catch (err: any) {
       item.status = 'error'; item.progressText = err.message || 'Unknown error'
@@ -459,27 +491,45 @@ const processSvgas = async () => {
 const uploadToCdn = async (item: VideoItem | SvgaItem, type: 'video' | 'svga') => {
   item.cdnUploading = true
   try {
-    const filePath = type === 'video'
-      ? `webm/${item.outputName}/playable.webm`
-      : `svga/${item.outputName}/${item.outputName}.json`
-
-    const res = await $fetch<{ success: boolean; url?: string; error?: string }>('/api/upload-cdn', {
+    const res = await $fetch<{ success: boolean; urls?: string[]; log?: string; error?: string }>('/api/upload-cdn', {
       method: 'POST',
       body: {
+        name: item.outputName,
         provider: item.cdnProvider,
-        filePath,
-        remotePath: item.cdnPath || '/',
-        assetName: item.outputName,
+        cdnPath: item.cdnPath || '/',
+        assetType: type === 'video' ? 'video' : 'svga',
       },
     })
 
-    if (!res.success) throw new Error(res.error || 'Upload failed')
-    item.cdnUrl = res.url || ''
+    if (!res.success) throw new Error(res.error || res.log || 'Upload failed')
+    item.cdnUrl = res.urls?.[0] || ''
     addToast?.('success', `Uploaded to CDN: ${item.outputName}`)
   } catch (err: any) {
     addToast?.('error', `CDN upload failed: ${err.message}`)
   }
   item.cdnUploading = false
+}
+
+// ── HEVC Trigger ─────────────────────────────────────────────────
+const triggerHevc = async (item: VideoItem) => {
+  try {
+    const res = await $fetch<{ success: boolean; message?: string; actionsUrl?: string; error?: string }>('/api/trigger-hevc', {
+      method: 'POST',
+      body: {
+        assetName: item.outputName,
+        cdnProvider: item.cdnProvider,
+        cdnPath: item.cdnPath || '/',
+      },
+    })
+    if (!res.success) throw new Error(res.error || 'Trigger failed')
+    item.hevcTriggered = true
+    addToast?.('success', res.message || 'HEVC encoding triggered on GitHub Actions!')
+    if (res.actionsUrl) {
+      window.open(res.actionsUrl, '_blank')
+    }
+  } catch (err: any) {
+    addToast?.('error', `HEVC trigger failed: ${err.message}`)
+  }
 }
 </script>
 
