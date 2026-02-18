@@ -53,12 +53,13 @@ jobs:
           echo "⏳ Encoding HEVC with alpha via VideoToolbox..."
           ffmpeg -y -hide_banner -loglevel info \
             -i tmp/input.webm \
-            -vf "format=bgra" \
+            -filter_complex "[0:v]format=bgra[outv]" \
+            -map "[outv]" -map 0:a? \
             -c:v hevc_videotoolbox \
             -allow_sw 1 \
             -alpha_quality 0.75 \
             -tag:v hvc1 \
-            -map 0:a? -c:a aac -b:a 128k \
+            -c:a aac -b:a 128k \
             "output/hevc/${{ inputs.asset_name }}/playable.mov"
           echo "✅ Encoded successfully"
           ls -lh "output/hevc/${{ inputs.asset_name }}/playable.mov"
