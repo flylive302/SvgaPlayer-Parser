@@ -13,6 +13,9 @@
       <button class="tab" :class="{ active: activeTab === 'svga' }" @click="activeTab = 'svga'">
         <span class="tab-icon svga">✨</span> SVGA (→ JSON)
       </button>
+      <button class="tab" :class="{ active: activeTab === 'hevc' }" @click="activeTab = 'hevc'; loadCdnAssets()">
+        <span class="tab-icon hevc">🍎</span> HEVC (WebM → .mov)
+      </button>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
@@ -275,6 +278,87 @@
         </div>
       </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- HEVC TAB                                                   -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div v-if="activeTab === 'hevc'">
+      <!-- Loading -->
+      <div v-if="hevcLoading" class="hevc-loading">
+        <span class="spinner" style="width:24px;height:24px;border-width:3px"></span>
+        <span style="color:var(--text-muted)">Loading CDN assets...</span>
+      </div>
+
+      <!-- Empty state -->
+      <div v-else-if="hevcAssets.length === 0" class="hevc-empty">
+        <div class="hevc-empty-icon">🍎</div>
+        <h3>No WebM assets on CDN</h3>
+        <p>Convert an MP4 → WebM and upload it to CDN first, then come back here to encode HEVC for iOS.</p>
+        <button class="btn btn-secondary" @click="activeTab = 'video'">Go to Video tab</button>
+      </div>
+
+      <!-- Asset list -->
+      <div v-else class="asset-queue">
+        <div class="queue-header">
+          <h2 class="card-title">{{ hevcAssets.length }} WebM asset{{ hevcAssets.length > 1 ? 's' : '' }} on CDN</h2>
+          <button class="btn btn-secondary btn-sm" @click="loadCdnAssets">🔄 Refresh</button>
+        </div>
+
+        <div v-for="asset in hevcAssets" :key="asset.name" class="asset-card hevc-card">
+          <div class="asset-thumb hevc-thumb">🍎</div>
+          <div class="asset-info">
+            <div class="asset-name">{{ asset.name }}</div>
+            <div class="asset-meta">
+              <span>{{ asset.assetType }} · uploaded {{ formatDate(asset.encoded_at) }}</span>
+            </div>
+
+            <!-- CDN URLs -->
+            <div class="hevc-urls">
+              <div v-for="url in asset.cdn_urls" :key="url" class="hevc-url-chip">
+                <span class="hevc-url-ext" :class="getUrlExtClass(url)">{{ getUrlExt(url) }}</span>
+                <a :href="url" target="_blank" class="hevc-url-link">{{ shortenUrl(url) }}</a>
+              </div>
+            </div>
+
+            <!-- Has HEVC already? -->
+            <div v-if="hasHevc(asset)" class="hevc-done">
+              <span class="badge badge-emerald">✅ HEVC Available</span>
+              <a :href="getHevcUrl(asset)" target="_blank" class="btn btn-success btn-sm">⬇️ Download .mov</a>
+            </div>
+
+            <!-- Trigger HEVC -->
+            <div v-else class="hevc-trigger-section">
+              <div class="hevc-trigger-row">
+                <div class="form-group" style="margin-bottom:0;min-width:120px">
+                  <label class="form-label">CDN Provider</label>
+                  <select v-model="asset._provider" class="form-select">
+                    <option value="r2">Cloudflare R2</option>
+                    <option value="imagekit">ImageKit</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;flex:1">
+                  <label class="form-label">CDN Path</label>
+                  <input v-model="asset._cdnPath" class="form-input" placeholder="/" />
+                </div>
+                <button
+                  class="btn btn-primary btn-sm hevc-encode-btn"
+                  :disabled="asset._encoding"
+                  @click="triggerHevcEncoding(asset)"
+                >
+                  <span v-if="asset._encoding" class="spinner" style="width:14px;height:14px;border-width:2px"></span>
+                  {{ asset._encoding ? 'Triggering...' : '🍎 Encode HEVC' }}
+                </button>
+              </div>
+              <div v-if="asset._triggered" class="hevc-triggered-msg">
+                <span class="badge badge-blue">⏳ Encoding on GitHub Actions</span>
+                <a v-if="asset._actionsUrl" :href="asset._actionsUrl" target="_blank" class="btn btn-secondary btn-sm">View on GitHub</a>
+                <p class="hevc-wait-hint">The macOS runner downloads the WebM, encodes HEVC, and uploads the .mov. Refresh this page in a few minutes to see the result.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -286,7 +370,7 @@ useHead({ title: 'Convert — AlphaConvert' })
 const addToast = inject<(type: string, msg: string) => void>('addToast')
 
 // ── Tab state ────────────────────────────────────────────────────
-const activeTab = ref<'video' | 'svga'>('video')
+const activeTab = ref<'video' | 'svga' | 'hevc'>('video')
 
 // ── VIDEO ────────────────────────────────────────────────────────
 interface VideoItem {
@@ -531,6 +615,105 @@ const triggerHevc = async (item: VideoItem) => {
     addToast?.('error', `HEVC trigger failed: ${err.message}`)
   }
 }
+
+// ── HEVC Tab ─────────────────────────────────────────────────────
+interface HevcAsset {
+  name: string
+  assetType: string
+  encoded_at: string
+  cdn_urls: string[]
+  formats: Record<string, string>
+  cdnPath?: string
+  thumbnail?: string
+  // UI-only fields
+  _provider: string
+  _cdnPath: string
+  _encoding: boolean
+  _triggered: boolean
+  _actionsUrl: string
+}
+
+const hevcLoading = ref(false)
+const hevcAssets = ref<HevcAsset[]>([])
+
+const loadCdnAssets = async () => {
+  hevcLoading.value = true
+  try {
+    const manifest = await $fetch<{ assets: Array<any> }>('/api/assets')
+    // Only show assets that have a WebM CDN URL
+    hevcAssets.value = (manifest.assets || [])
+      .filter((a: any) => (a.cdn_urls || []).some((u: string) => u.endsWith('.webm')))
+      .map((a: any) => ({
+        ...a,
+        _provider: 'r2',
+        _cdnPath: a.cdnPath || '/',
+        _encoding: false,
+        _triggered: false,
+        _actionsUrl: '',
+      }))
+  } catch (err: any) {
+    addToast?.('error', `Failed to load CDN assets: ${err.message}`)
+  }
+  hevcLoading.value = false
+}
+
+const hasHevc = (asset: HevcAsset): boolean => {
+  return (asset.cdn_urls || []).some((u: string) => u.endsWith('.mov'))
+}
+
+const getHevcUrl = (asset: HevcAsset): string => {
+  return (asset.cdn_urls || []).find((u: string) => u.endsWith('.mov')) || ''
+}
+
+const getUrlExt = (url: string): string => {
+  const ext = url.split('.').pop()?.toLowerCase() || ''
+  return '.' + ext
+}
+
+const getUrlExtClass = (url: string): string => {
+  const ext = url.split('.').pop()?.toLowerCase() || ''
+  if (ext === 'webm') return 'ext-blue'
+  if (ext === 'mov') return 'ext-emerald'
+  if (ext === 'png' || ext === 'jpg' || ext === 'webp') return 'ext-amber'
+  return 'ext-gray'
+}
+
+const shortenUrl = (url: string): string => {
+  try {
+    const u = new URL(url)
+    return u.pathname.length > 40 ? '...' + u.pathname.slice(-35) : u.pathname
+  } catch {
+    return url.length > 50 ? '...' + url.slice(-45) : url
+  }
+}
+
+const formatDate = (iso: string): string => {
+  try {
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch { return iso }
+}
+
+const triggerHevcEncoding = async (asset: HevcAsset) => {
+  asset._encoding = true
+  try {
+    const res = await $fetch<{ success: boolean; message?: string; actionsUrl?: string; error?: string }>('/api/trigger-hevc', {
+      method: 'POST',
+      body: {
+        assetName: asset.name,
+        cdnProvider: asset._provider,
+        cdnPath: asset._cdnPath || '/',
+      },
+    })
+    if (!res.success) throw new Error(res.error || 'Trigger failed')
+    asset._triggered = true
+    asset._actionsUrl = res.actionsUrl || ''
+    addToast?.('success', res.message || `HEVC encoding triggered for ${asset.name}!`)
+  } catch (err: any) {
+    addToast?.('error', `HEVC trigger failed: ${err.message}`)
+  }
+  asset._encoding = false
+}
 </script>
 
 <style scoped>
@@ -567,6 +750,108 @@ const triggerHevc = async (item: VideoItem) => {
 .tab.active { background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-sm); }
 
 .tab-icon { font-size: 1.1rem; }
+
+/* ── HEVC Tab ─────────────────────────────────────────────── */
+.hevc-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.hevc-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.hevc-empty-icon { font-size: 3rem; margin-bottom: 16px; }
+.hevc-empty h3 { font-size: 1.1rem; color: var(--text-primary); margin-bottom: 8px; }
+.hevc-empty p { font-size: 0.85rem; margin-bottom: 20px; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+.hevc-card {
+  border-left: 3px solid var(--accent-emerald) !important;
+}
+
+.hevc-thumb {
+  background: rgba(16, 185, 129, 0.08) !important;
+  font-size: 1.4rem;
+}
+
+.hevc-urls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.hevc-url-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.hevc-url-ext {
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.ext-blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+.ext-emerald { background: rgba(16,185,129,0.15); color: var(--accent-emerald); }
+.ext-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+.ext-gray { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+
+.hevc-url-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-mono);
+}
+.hevc-url-link:hover { color: var(--text-primary); }
+
+.hevc-done {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.hevc-trigger-section { margin-top: 10px; }
+
+.hevc-trigger-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hevc-encode-btn {
+  white-space: nowrap;
+  margin-top: auto;
+}
+
+.hevc-triggered-msg {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hevc-wait-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  width: 100%;
+}
 
 /* ── Queue ─────────────────────────────────────────────── */
 .queue-header {

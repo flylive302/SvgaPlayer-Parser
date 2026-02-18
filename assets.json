@@ -43,6 +43,20 @@
         "webm": "plain/plain/playable.webm"
       },
       "thumbnail": "https://assets.flyliveapp.com/plain/plain/thumbnail.png"
+    },
+    {
+      "name": "Tiger",
+      "cdnPath": "/tiger",
+      "assetType": "video",
+      "encoded_at": "2026-02-18T04:08:17.833Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/tiger/Tiger/playable.webm",
+        "https://assets.flyliveapp.com/tiger/Tiger/thumbnail.png"
+      ],
+      "formats": {
+        "webm": "tiger/Tiger/playable.webm"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/tiger/Tiger/thumbnail.png"
     }
   ]
 }
