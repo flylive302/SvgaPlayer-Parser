@@ -2,13 +2,13 @@
 // Rename or relocate an asset
 import { defineEventHandler, getRouterParam, readBody, createError } from 'h3'
 import { join } from 'path'
-import { existsSync, readFileSync, renameSync, mkdirSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { existsSync, renameSync, mkdirSync } from 'fs'
+import { readManifest, writeManifest } from '../../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
   const body = await readBody(event)
-  const { newName, newType } = body
+  const { newName, newType, cdnPath } = body
 
   if (!name) {
     throw createError({ statusCode: 400, statusMessage: 'Missing asset name' })
@@ -42,40 +42,37 @@ export default defineEventHandler(async (event) => {
   }
 
   // Update manifest
-  const manifestPath = join(cwd, 'assets.json')
-  if (existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-      const asset = (manifest.assets || []).find((a: any) => a.name === name)
+  try {
+    const manifest = await readManifest()
+    const asset = manifest.assets.find(a => a.name === name)
 
-      if (asset) {
-        const updatedName = newName || name
-        const updatedType = newType || asset.type
+    if (asset) {
+      const updatedName = newName || name
+      const updatedType = newType || asset.assetType
+      const prefix = cdnPath || asset.cdnPath || `/${updatedName}`
 
-        asset.name = updatedName
-        asset.type = updatedType
+      asset.name = updatedName
+      asset.assetType = updatedType
 
-        const prefix = updatedType === 'vip' ? 'room/gifts/vip-gifts' : 'room/gifts/normal'
-
-        if (asset.assetType === 'svga') {
-          asset.formats = { json: `${prefix}/${updatedName}/${updatedName}.json` }
-        } else {
-          asset.formats = {
-            webm: `${prefix}/${updatedName}/playable.webm`,
-            hevc: `${prefix}/${updatedName}/playable.mov`,
-          }
-          asset.thumbnail = `${prefix}/${updatedName}/thumbnail.png`
+      if (asset.assetType === 'svga') {
+        asset.formats = { json: `${prefix}/${updatedName}/${updatedName}.json` }
+      } else {
+        asset.formats = {
+          webm: `${prefix}/${updatedName}/playable.webm`,
+          hevc: `${prefix}/${updatedName}/playable.mov`,
         }
-
-        asset.updated_at = new Date().toISOString()
+        asset.thumbnail = `${prefix}/${updatedName}/thumbnail.png`
       }
 
-      manifest.generated_at = new Date().toISOString()
-      await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
-      results.push('Manifest updated')
-    } catch (err: any) {
-      results.push(`Manifest update failed: ${err.message}`)
+      if (cdnPath) {
+        asset.cdnPath = cdnPath
+      }
     }
+
+    await writeManifest(manifest)
+    results.push('Manifest updated')
+  } catch (err: any) {
+    results.push(`Manifest update failed: ${err.message}`)
   }
 
   return {
@@ -84,3 +81,4 @@ export default defineEventHandler(async (event) => {
     message: `Asset "${name}" updated`,
   }
 })
+

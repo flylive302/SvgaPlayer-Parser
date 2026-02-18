@@ -113,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/composables/useFormatters'
 interface Asset {
   name: string
   assetType: string
@@ -142,11 +143,7 @@ const loadAssets = async () => {
   loading.value = false
 }
 
-const formatDate = (iso: string) => {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+
 
 const deleteAsset = async (name: string) => {
   if (!confirm(`Delete "${name}" and all its files?`)) return

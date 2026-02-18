@@ -85,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/composables/useFormatters'
 interface Asset {
   name: string
   type: string
@@ -99,12 +100,7 @@ const uploadedCount = computed(() => assets.value.length)
 const webmCount = computed(() => assets.value.filter(a => a.formats?.webm).length)
 const hevcCount = computed(() => assets.value.filter(a => a.formats?.hevc).length)
 
-const formatDate = (iso: string) => {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  })
-}
+
 
 const refreshAssets = async () => {
   try {

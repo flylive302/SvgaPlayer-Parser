@@ -52,6 +52,9 @@
 <script setup lang="ts">
 const route = useRoute()
 const isLinux = ref(true)
+onMounted(() => {
+  isLinux.value = typeof navigator !== 'undefined' && navigator.platform.includes('Linux')
+})
 </script>
 
 <style scoped>

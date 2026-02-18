@@ -53,6 +53,7 @@ jobs:
           echo "⏳ Encoding HEVC with alpha via VideoToolbox..."
           ffmpeg -y -hide_banner -loglevel info \
             -i tmp/input.webm \
+            -vf "format=bgra" \
             -c:v hevc_videotoolbox \
             -allow_sw 1 \
             -alpha_quality 0.75 \

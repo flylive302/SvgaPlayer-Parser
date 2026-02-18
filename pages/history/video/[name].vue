@@ -205,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/composables/useFormatters'
 const route = useRoute()
 const router = useRouter()
 const addToast = inject<(type: string, msg: string) => void>('addToast')
@@ -250,10 +251,7 @@ const loadAsset = async () => {
   loading.value = false
 }
 
-const formatDate = (iso: string) => {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+
 
 const copyUrl = (url: string) => {
   navigator.clipboard.writeText(url)

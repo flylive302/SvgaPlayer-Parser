@@ -23,10 +23,14 @@ logs
 .env.*
 !.env.example
 
-# Raw input videos (large, not committed)
+# Raw input files (large, not committed)
 raw/*.mp4
 raw/*.mov
 raw/*.MP4
+raw/*.svga
+
+# Legacy converter prototype
+mp4-converter/
 
 # Encoded output (uploaded to R2, not committed)
 output/

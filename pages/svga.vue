@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatSize, statusBadge } from '~/composables/useFormatters'
 interface SvgaItem {
   id: number
   file: File
@@ -189,20 +190,6 @@ const addFiles = (files: File[]) => {
 
 const removeFromQueue = (idx: number) => queue.value.splice(idx, 1)
 const clearQueue = () => { queue.value = [] }
-
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-const statusBadge = (status: string) => {
-  const map: Record<string, string> = {
-    queued: 'badge-blue', uploading: 'badge-amber', processing: 'badge-violet',
-    done: 'badge-emerald', error: 'badge-rose'
-  }
-  return map[status] || 'badge-blue'
-}
 
 const processAll = async () => {
   isProcessing.value = true

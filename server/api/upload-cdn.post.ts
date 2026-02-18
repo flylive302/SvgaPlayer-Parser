@@ -4,7 +4,8 @@
 import { defineEventHandler, readBody } from 'h3'
 import { join, extname } from 'path'
 import { existsSync, readFileSync, readdirSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { loadEnvVar } from '../utils/env'
+import { upsertManifestEntry } from '../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -59,18 +60,7 @@ function normalizeCdnPath(p: string): string {
   return clean
 }
 
-// ── Load credentials from .env ────────────────────────────────────────────
-function loadEnvVar(cwd: string, key: string): string {
-  if (process.env[key]) return process.env[key] as string
-
-  const envPath = join(cwd, '.env')
-  if (!existsSync(envPath)) return ''
-
-  const content = readFileSync(envPath, 'utf-8')
-  const regex = new RegExp(key + '="?([^"\\n]+)"?')
-  const match = content.match(regex)
-  return match ? match[1].trim() : ''
-}
+// loadEnvVar imported from ../utils/env
 
 // ── Collect files to upload ──────────────────────────────────────────────
 interface UploadFile {
@@ -174,10 +164,10 @@ async function uploadFile(
 
 // ── R2 Upload ────────────────────────────────────────────────────────────
 async function uploadFileToR2(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
-  const accountId = loadEnvVar(cwd, 'CLOUDFLARE_ACCOUNT_ID')
-  const apiToken = loadEnvVar(cwd, 'CLOUDFLARE_API_TOKEN')
-  const bucket = loadEnvVar(cwd, 'R2_BUCKET_NAME') || 'flylive-assets'
-  const customDomain = loadEnvVar(cwd, 'R2_CUSTOM_DOMAIN')
+  const accountId = loadEnvVar('CLOUDFLARE_ACCOUNT_ID')
+  const apiToken = loadEnvVar('CLOUDFLARE_API_TOKEN')
+  const bucket = loadEnvVar('R2_BUCKET_NAME') || 'flylive-assets'
+  const customDomain = loadEnvVar('R2_CUSTOM_DOMAIN')
 
   if (!accountId || !apiToken) {
     return { msg: '❌ Cloudflare Account ID or API Token not configured. Go to Settings.' }
@@ -211,8 +201,8 @@ async function uploadFileToR2(f: UploadFile, cwd: string): Promise<{ msg: string
 
 // ── ImageKit Upload ──────────────────────────────────────────────────────
 async function uploadFileToImageKit(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
-  const privateKey = loadEnvVar(cwd, 'IMAGEKIT_PRIVATE_KEY')
-  const urlEndpoint = loadEnvVar(cwd, 'IMAGEKIT_URL_ENDPOINT')
+  const privateKey = loadEnvVar('IMAGEKIT_PRIVATE_KEY')
+  const urlEndpoint = loadEnvVar('IMAGEKIT_URL_ENDPOINT')
 
   if (!privateKey) {
     return { msg: '❌ ImageKit private key not configured. Go to Settings.' }
@@ -254,62 +244,24 @@ async function uploadFileToImageKit(f: UploadFile, cwd: string): Promise<{ msg: 
 }
 
 // ── Manifest ─────────────────────────────────────────────────────────────
-interface ManifestEntry {
-  name: string
-  cdnPath: string
-  assetType: string
-  encoded_at: string
-  cdn_urls: string[]
-  formats: Record<string, string>
-  thumbnail?: string
-}
+// Types and read/write imported from ../utils/manifest and ../utils/types
 
-interface Manifest {
-  version: number
-  generated_at: string
-  assets: ManifestEntry[]
-}
-
-async function updateManifest(cwd: string, name: string, cdnPath: string, assetType: string, urls: string[]) {
-  const manifestPath = join(cwd, 'assets.json')
-  let manifest: Manifest = { version: 1, generated_at: '', assets: [] }
-
-  if (existsSync(manifestPath)) {
-    try {
-      manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Manifest
-    } catch (_e) { /* ignore malformed JSON */ }
-  }
-
+async function updateManifest(_cwd: string, name: string, cdnPath: string, assetType: string, urls: string[]) {
   const prefix = cdnPath === '/' ? name : `${cdnPath.slice(1)}/${name}`
 
-  // Remove existing entry with same name
-  manifest.assets = manifest.assets.filter(a => a.name !== name)
+  const thumbUrl = urls.find(u => u.includes('thumbnail'))
 
-  const entry: ManifestEntry = {
+  const formats: Record<string, string> = assetType === 'svga'
+    ? { json: `${prefix}/${name}.json` }
+    : { webm: `${prefix}/playable.webm` }
+
+  await upsertManifestEntry(name, () => ({
     name,
     cdnPath,
     assetType,
     encoded_at: new Date().toISOString(),
     cdn_urls: urls,
-    formats: {},
-  }
-
-  if (assetType === 'svga') {
-    entry.formats = { json: `${prefix}/${name}.json` }
-  } else {
-    entry.formats = {
-      webm: `${prefix}/playable.webm`,
-    }
-  }
-
-  // Find thumbnail URL from uploaded URLs
-  const thumbUrl = urls.find(u => u.includes('thumbnail'))
-  if (thumbUrl) {
-    entry.thumbnail = thumbUrl
-  }
-
-  manifest.assets.push(entry)
-  manifest.generated_at = new Date().toISOString()
-
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+    formats,
+    ...(thumbUrl ? { thumbnail: thumbUrl } : {}),
+  }))
 }

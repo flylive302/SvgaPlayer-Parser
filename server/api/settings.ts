@@ -1,7 +1,7 @@
 // server/api/settings.ts
 // GET: Load settings from .env, POST: Save settings to .env
 import { defineEventHandler, getMethod, readBody } from 'h3'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 
 const ENV_KEYS = {
@@ -20,12 +20,12 @@ function getEnvPath() {
   return join(process.cwd(), '.env')
 }
 
-function loadEnv(): Record<string, string> {
+async function loadEnv(): Promise<Record<string, string>> {
   const envPath = getEnvPath()
   const pairs: Record<string, string> = {}
 
-  if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf-8')
+  try {
+    const content = await readFile(envPath, 'utf-8')
     for (const line of content.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#')) continue
@@ -40,25 +40,22 @@ function loadEnv(): Record<string, string> {
         pairs[key] = val
       }
     }
+  } catch {
+    // File doesn't exist yet
   }
 
   return pairs
 }
 
-function saveEnv(pairs: Record<string, string>) {
-  const envPath = getEnvPath()
-  let existing: Record<string, string> = {}
-
-  if (existsSync(envPath)) {
-    existing = loadEnv()
-  }
+async function saveEnv(pairs: Record<string, string>) {
+  const existing = await loadEnv()
 
   const merged = { ...existing, ...pairs }
   const lines = Object.entries(merged)
     .filter(([, v]) => v !== undefined && v !== '')
     .map(([k, v]) => `${k}="${v}"`)
 
-  writeFileSync(envPath, lines.join('\n') + '\n')
+  await writeFile(getEnvPath(), lines.join('\n') + '\n')
 }
 
 export default defineEventHandler(async (event) => {
@@ -66,7 +63,7 @@ export default defineEventHandler(async (event) => {
 
   if (method === 'GET') {
     // Load settings
-    const env = loadEnv()
+    const env = await loadEnv()
     const result: Record<string, string> = {}
 
     for (const [settingsKey, envKey] of Object.entries(ENV_KEYS)) {
@@ -99,8 +96,9 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    saveEnv(envPairs)
+    await saveEnv(envPairs)
 
     return { success: true, message: 'Settings saved to .env' }
   }
 })
+

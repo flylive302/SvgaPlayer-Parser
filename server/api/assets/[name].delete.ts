@@ -2,8 +2,9 @@
 // Deletes an asset: removes files from output/, removes CDN assets, and removes entry from assets.json
 import { defineEventHandler, getRouterParam, createError } from 'h3'
 import { join } from 'path'
-import { existsSync, readFileSync, rmSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { existsSync, rmSync } from 'fs'
+import { loadEnvVar } from '../../utils/env'
+import { readManifest, removeManifestEntry } from '../../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -13,26 +14,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const cwd = process.cwd()
-  const manifestPath = join(cwd, 'assets.json')
 
   // Read existing manifest to get CDN URLs before deleting
   let cdnUrls: string[] = []
-  let assetEntry: any = null
-  if (existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-      assetEntry = (manifest.assets || []).find((a: any) => a.name === name)
-      if (assetEntry) {
-        cdnUrls = assetEntry.cdn_urls || []
-      }
-    } catch { /* ignore */ }
+  const manifest = await readManifest()
+  const assetEntry = manifest.assets.find(a => a.name === name)
+  if (assetEntry) {
+    cdnUrls = assetEntry.cdn_urls || []
   }
 
   // 1. Delete from CDN
   const cdnResults: string[] = []
   if (cdnUrls.length > 0) {
     for (const url of cdnUrls) {
-      const result = await deleteCdnAsset(url, cwd)
+      const result = await deleteCdnAsset(url)
       cdnResults.push(result)
     }
   }
@@ -60,14 +55,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // 3. Remove from manifest
-  if (existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-      manifest.assets = (manifest.assets || []).filter((a: any) => a.name !== name)
-      manifest.generated_at = new Date().toISOString()
-      await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
-    } catch { /* ignore */ }
-  }
+  await removeManifestEntry(name)
 
   return {
     success: true,
@@ -78,30 +66,19 @@ export default defineEventHandler(async (event) => {
 })
 
 // ── CDN Delete Helpers ──────────────────────────────────────────────────
-
-function loadEnvVar(cwd: string, key: string): string {
-  if (process.env[key]) return process.env[key] as string
-
-  const envPath = join(cwd, '.env')
-  if (!existsSync(envPath)) return ''
-
-  const content = readFileSync(envPath, 'utf-8')
-  const regex = new RegExp(key + '="?([^"\\n]+)"?')
-  const match = content.match(regex)
-  return match ? match[1].trim() : ''
-}
+// loadEnvVar imported from ../../utils/env
 
 /**
  * Delete a CDN asset by its URL.
  * Detects the CDN provider from the URL and calls the appropriate delete API.
  */
-async function deleteCdnAsset(url: string, cwd: string): Promise<string> {
+async function deleteCdnAsset(url: string): Promise<string> {
   try {
     if (url.includes('imagekit.io')) {
-      return await deleteFromImageKit(url, cwd)
+      return await deleteFromImageKit(url)
     } else {
       // Assume R2 (custom domain or direct)
-      return await deleteFromR2(url, cwd)
+      return await deleteFromR2(url)
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -113,11 +90,11 @@ async function deleteCdnAsset(url: string, cwd: string): Promise<string> {
  * Delete an object from Cloudflare R2 via S3-compatible API.
  * Extracts the object key from the URL.
  */
-async function deleteFromR2(url: string, cwd: string): Promise<string> {
-  const accountId = loadEnvVar(cwd, 'CLOUDFLARE_ACCOUNT_ID')
-  const apiToken = loadEnvVar(cwd, 'CLOUDFLARE_API_TOKEN')
-  const bucket = loadEnvVar(cwd, 'R2_BUCKET_NAME') || 'flylive-assets'
-  const customDomain = loadEnvVar(cwd, 'R2_CUSTOM_DOMAIN') || ''
+async function deleteFromR2(url: string): Promise<string> {
+  const accountId = loadEnvVar('CLOUDFLARE_ACCOUNT_ID')
+  const apiToken = loadEnvVar('CLOUDFLARE_API_TOKEN')
+  const bucket = loadEnvVar('R2_BUCKET_NAME') || 'flylive-assets'
+  const customDomain = loadEnvVar('R2_CUSTOM_DOMAIN') || ''
 
   if (!accountId || !apiToken) {
     return `⚠️ R2 credentials not configured, skipping CDN delete for: ${url}`
@@ -162,8 +139,8 @@ async function deleteFromR2(url: string, cwd: string): Promise<string> {
  * Delete a file from ImageKit.
  * First lists files to find the fileId, then deletes by fileId.
  */
-async function deleteFromImageKit(url: string, cwd: string): Promise<string> {
-  const privateKey = loadEnvVar(cwd, 'IMAGEKIT_PRIVATE_KEY')
+async function deleteFromImageKit(url: string): Promise<string> {
+  const privateKey = loadEnvVar('IMAGEKIT_PRIVATE_KEY')
 
   if (!privateKey) {
     return `⚠️ ImageKit credentials not configured, skipping CDN delete for: ${url}`

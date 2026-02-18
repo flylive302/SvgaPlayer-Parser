@@ -1,34 +1,8 @@
 // server/api/trigger-hevc.post.ts
 // Triggers GitHub Actions workflow to encode HEVC from an already-uploaded WebM
 import { defineEventHandler, readBody, createError } from 'h3'
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
-
-function loadEnvVar(key: string): string {
-  // Check process.env first, then .env file
-  if (process.env[key]) return process.env[key]!
-
-  const envPath = join(process.cwd(), '.env')
-  if (!existsSync(envPath)) return ''
-
-  const content = readFileSync(envPath, 'utf-8')
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eqIdx = trimmed.indexOf('=')
-    if (eqIdx > 0) {
-      const k = trimmed.substring(0, eqIdx).trim()
-      if (k === key) {
-        let val = trimmed.substring(eqIdx + 1).trim()
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1)
-        }
-        return val
-      }
-    }
-  }
-  return ''
-}
+import { loadEnvVar } from '../utils/env'
+import { readManifest } from '../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -49,13 +23,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // Find the WebM CDN URL from assets.json
-  const assetsPath = join(process.cwd(), 'assets.json')
-  if (!existsSync(assetsPath)) {
-    throw createError({ statusCode: 404, statusMessage: 'assets.json not found' })
-  }
-
-  const manifest = JSON.parse(readFileSync(assetsPath, 'utf-8'))
-  const asset = (manifest.assets || []).find((a: any) => a.name === assetName)
+  const manifest = await readManifest()
+  const asset = manifest.assets.find(a => a.name === assetName)
   if (!asset) {
     throw createError({ statusCode: 404, statusMessage: `Asset "${assetName}" not found in manifest` })
   }
@@ -112,3 +81,4 @@ export default defineEventHandler(async (event) => {
     webmUrl: webmCdnUrl,
   }
 })
+
