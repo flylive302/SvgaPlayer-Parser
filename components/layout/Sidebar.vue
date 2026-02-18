@@ -1,191 +1,182 @@
 <template>
-  <nav class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-logo">
-        <span class="sidebar-logo-icon">◆</span>
-        <div>
-          <div class="sidebar-logo-text">AlphaConvert</div>
-          <div class="sidebar-logo-sub">SVGA · WebM · HEVC</div>
-        </div>
+  <header class="topbar-wrap">
+    <nav class="topbar">
+      <!-- Logo -->
+      <NuxtLink to="/" class="topbar-brand">
+        <svg class="brand-mark" width="24" height="24" viewBox="0 0 28 28" fill="none">
+          <defs>
+            <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8b5cf6"/><stop offset="50%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#10b981"/>
+            </linearGradient>
+          </defs>
+          <path d="M14 2L26 8V20L14 26L2 20V8L14 2Z" fill="url(#hg)" opacity="0.9"/>
+          <path d="M14 6L22 10V18L14 22L6 18V10L14 6Z" fill="rgba(0,0,0,0.3)"/>
+          <path d="M14 10L18 12V16L14 18L10 16V12L14 10Z" fill="white" opacity="0.9"/>
+        </svg>
+        <span class="brand-name">Alpha<span class="brand-accent">Convert</span></span>
+      </NuxtLink>
+
+      <!-- Center nav links -->
+      <div class="topbar-links">
+        <NuxtLink to="/convert" class="topbar-link" :class="{active: route.path === '/convert'}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          Convert
+        </NuxtLink>
+        <NuxtLink to="/cdn-upload" class="topbar-link" :class="{active: route.path === '/cdn-upload'}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          CDN
+        </NuxtLink>
+        <NuxtLink to="/history" class="topbar-link" :class="{active: route.path.startsWith('/history')}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </NuxtLink>
+        <NuxtLink to="/settings" class="topbar-link" :class="{active: route.path === '/settings'}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </NuxtLink>
       </div>
-    </div>
 
-    <div class="sidebar-nav">
-      <NuxtLink to="/" class="nav-item" :class="{active: route.path === '/'}">
-        <span class="nav-icon">🏠</span>
-        <span>Home</span>
-      </NuxtLink>
-
-      <div class="nav-section-label">Tools</div>
-
-      <NuxtLink to="/convert" class="nav-item" :class="{active: route.path === '/convert'}">
-        <span class="nav-icon">⚡</span>
-        <span>Convert</span>
-      </NuxtLink>
-      <NuxtLink to="/cdn-upload" class="nav-item" :class="{active: route.path === '/cdn-upload'}">
-        <span class="nav-icon">☁️</span>
-        <span>CDN Upload</span>
-      </NuxtLink>
-
-      <div class="nav-section-label">Management</div>
-
-      <NuxtLink to="/history" class="nav-item" :class="{active: route.path.startsWith('/history')}">
-        <span class="nav-icon">📁</span>
-        <span>History</span>
-      </NuxtLink>
-      <NuxtLink to="/settings" class="nav-item" :class="{active: route.path === '/settings'}">
-        <span class="nav-icon">⚙️</span>
-        <span>Settings</span>
-      </NuxtLink>
-    </div>
-
-    <div class="sidebar-footer">
-      <div class="sidebar-env">
-        <span class="status-dot" :class="isLinux ? 'pending' : 'success'"></span>
-        <span>{{ isLinux ? 'Linux (WebM only)' : 'macOS (Full)' }}</span>
+      <!-- Right: env pill -->
+      <div class="topbar-right">
+        <span class="env-pill">
+          <span class="env-dot" :class="isLinux ? 'warn' : 'ok'"></span>
+          {{ isLinux ? 'Linux' : 'macOS' }}
+        </span>
       </div>
-      <div class="sidebar-version">v3.0.0</div>
-    </div>
-  </nav>
+    </nav>
+  </header>
 </template>
 
 <script setup lang="ts">
 const route = useRoute()
 const isLinux = ref(true)
 onMounted(() => {
-  isLinux.value = typeof navigator !== 'undefined' && navigator.platform.includes('Linux')
+  isLinux.value = typeof navigator !== 'undefined' && !navigator.platform.includes('Mac')
 })
 </script>
 
 <style scoped>
-.sidebar {
+.topbar-wrap {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--sidebar-width);
-  height: 100vh;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  z-index: 100;
-  overflow-y: auto;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: calc(100% - 48px);
+  max-width: 960px;
+  animation: headerDrop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sidebar-header {
-  padding: 24px 20px;
-  border-bottom: 1px solid var(--border-subtle);
+@keyframes headerDrop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-.sidebar-logo {
+.topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  padding: 10px 20px;
+  border-radius: 16px;
+  background: rgba(10, 14, 28, 0.78);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(56, 78, 120, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
-.sidebar-logo-icon {
-  font-size: 1.5rem;
-  width: 44px;
-  height: 44px;
+/* ── Brand ──────────────────────────── */
+.topbar-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #8b5cf6, #3b82f6, #10b981);
-  border-radius: var(--radius-md);
-  color: white;
-  font-weight: 800;
-}
-
-.sidebar-logo-text {
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-
-.sidebar-logo-sub {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-section-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  padding: 16px 14px 6px;
-  opacity: 0.6;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 14px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  gap: 10px;
   text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all var(--transition-fast);
-  position: relative;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
 }
 
-.nav-item:hover {
-  background: rgba(59, 130, 246, 0.08);
+.topbar-brand:hover { opacity: 0.85; }
+
+.brand-mark { animation: logoSpin 20s linear infinite; }
+@keyframes logoSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.brand-name {
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
-.nav-item.active {
-  background: rgba(59, 130, 246, 0.12);
-  color: var(--accent-blue);
-  font-weight: 600;
+.brand-accent { color: var(--accent-violet); }
+
+/* ── Links ──────────────────────────── */
+.topbar-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 auto;
 }
 
-.nav-item.active::before {
+.topbar-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  white-space: nowrap;
+}
+
+.topbar-link:hover {
+  color: var(--text-primary);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.topbar-link.active {
+  color: white;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.topbar-link.active::after {
   content: '';
   position: absolute;
-  left: 0;
-  width: 3px;
-  height: 24px;
-  background: var(--accent-blue);
-  border-radius: 0 3px 3px 0;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 16px; height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8b5cf6, #3b82f6);
 }
 
-.nav-icon {
-  font-size: 1.15rem;
-  width: 24px;
-  text-align: center;
-}
+/* ── Right ──────────────────────────── */
+.topbar-right { flex-shrink: 0; }
 
-.sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.sidebar-env {
+.env-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  font-size: 0.7rem;
+  font-weight: 500;
   color: var(--text-muted);
-  margin-bottom: 4px;
 }
 
-.sidebar-version {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+.env-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
 }
+
+.env-dot.ok { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.4); }
+.env-dot.warn { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.4); }
 </style>
