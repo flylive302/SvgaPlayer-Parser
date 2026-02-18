@@ -2,11 +2,13 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
+  modules: ['@pinia/nuxt'],
   app: {
     head: {
-      title: 'FlyLive Asset Pipeline',
+      title: 'AlphaConvert — SVGA Parser, WebM VP9 & HEVC Alpha Video Converter',
       meta: [
-        { name: 'description', content: 'Process and upload alpha-packed video assets for FlyLive' }
+        { name: 'description', content: 'Convert SVGA animations, alpha-packed MP4 to WebM VP9, and HEVC for iOS. The alpha video toolkit for Web & iOS.' },
+        { name: 'keywords', content: 'SVGA converter, SVGA parser, alpha video, WebM VP9, HEVC alpha, transparent video, iOS video, alpha channel' }
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },

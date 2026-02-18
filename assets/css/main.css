@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   FlyLive Asset Pipeline — Design System
+   AlphaConvert.dev — Design System
+   SVGA · WebM · HEVC — The alpha video toolkit for Web & iOS
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Reset & Base ──────────────────────────────────────────────────────── */
@@ -15,6 +16,7 @@
   /* Background layers */
   --bg-primary: #060a14;
   --bg-secondary: #0c1220;
+  --bg-tertiary: rgba(30, 41, 70, 0.5);
   --bg-card: rgba(15, 23, 42, 0.7);
   --bg-card-hover: rgba(20, 30, 55, 0.85);
   --bg-input: rgba(15, 23, 42, 0.5);

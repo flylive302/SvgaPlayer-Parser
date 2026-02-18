@@ -2,29 +2,29 @@
   <nav class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-logo">
-        <span class="sidebar-logo-icon">⚡</span>
+        <span class="sidebar-logo-icon">◆</span>
         <div>
-          <div class="sidebar-logo-text">FlyLive</div>
-          <div class="sidebar-logo-sub">Asset Pipeline</div>
+          <div class="sidebar-logo-text">AlphaConvert</div>
+          <div class="sidebar-logo-sub">SVGA · WebM · HEVC</div>
         </div>
       </div>
     </div>
 
     <div class="sidebar-nav">
       <NuxtLink to="/" class="nav-item" :class="{active: route.path === '/'}">
-        <span class="nav-icon">📊</span>
-        <span>Dashboard</span>
+        <span class="nav-icon">🏠</span>
+        <span>Home</span>
       </NuxtLink>
 
-      <div class="nav-section-label">Converters</div>
+      <div class="nav-section-label">Tools</div>
 
-      <NuxtLink to="/video" class="nav-item" :class="{active: route.path === '/video'}">
-        <span class="nav-icon">🎬</span>
-        <span>Video (MP4)</span>
+      <NuxtLink to="/convert" class="nav-item" :class="{active: route.path === '/convert'}">
+        <span class="nav-icon">⚡</span>
+        <span>Convert</span>
       </NuxtLink>
-      <NuxtLink to="/svga" class="nav-item" :class="{active: route.path === '/svga'}">
-        <span class="nav-icon">✨</span>
-        <span>SVGA</span>
+      <NuxtLink to="/cdn-upload" class="nav-item" :class="{active: route.path === '/cdn-upload'}">
+        <span class="nav-icon">☁️</span>
+        <span>CDN Upload</span>
       </NuxtLink>
 
       <div class="nav-section-label">Management</div>
@@ -35,7 +35,7 @@
       </NuxtLink>
       <NuxtLink to="/settings" class="nav-item" :class="{active: route.path === '/settings'}">
         <span class="nav-icon">⚙️</span>
-        <span>CDN Settings</span>
+        <span>Settings</span>
       </NuxtLink>
     </div>
 
@@ -44,7 +44,7 @@
         <span class="status-dot" :class="isLinux ? 'pending' : 'success'"></span>
         <span>{{ isLinux ? 'Linux (WebM only)' : 'macOS (Full)' }}</span>
       </div>
-      <div class="sidebar-version">v2.0.0</div>
+      <div class="sidebar-version">v3.0.0</div>
     </div>
   </nav>
 </template>
@@ -84,14 +84,16 @@ onMounted(() => {
 }
 
 .sidebar-logo-icon {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--gradient-blue);
+  background: linear-gradient(135deg, #8b5cf6, #3b82f6, #10b981);
   border-radius: var(--radius-md);
+  color: white;
+  font-weight: 800;
 }
 
 .sidebar-logo-text {
@@ -102,11 +104,10 @@ onMounted(() => {
 }
 
 .sidebar-logo-sub {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .sidebar-nav {
