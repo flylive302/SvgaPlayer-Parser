@@ -2,52 +2,128 @@
 // Uploads processed assets to Cloudflare R2 (S3 API) or ImageKit (REST API)
 // Supports separate CDN targets for asset vs thumbnail, and custom cdnPath
 import { defineEventHandler, readBody } from 'h3'
-import { join, extname } from 'path'
+import { join, extname, basename, resolve, sep } from 'path'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { loadEnvVar } from '../utils/env'
+import { getCredentials } from '../utils/db'
 import { upsertManifestEntry } from '../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { name, provider, thumbProvider, cdnPath, assetType } = body
 
-  if (!name || !provider) {
-    return { success: false, error: 'Missing name or provider' }
+  const {
+    name,
+    provider,
+    thumbProvider,
+    cdnPath,
+    assetType,
+    // Raw upload mode (used by /cdn-upload page)
+    filePath,
+    remotePath,
+    assetName,
+    filename,
+  } = body as {
+    name?: string
+    provider?: string
+    thumbProvider?: string
+    cdnPath?: string
+    assetType?: string
+    filePath?: string
+    remotePath?: string
+    assetName?: string
+    filename?: string
+  }
+
+  if (!provider) {
+    return { success: false, error: 'Missing provider' }
   }
 
   const cwd = process.cwd()
-  const outputDir = join(cwd, 'output')
-  // Normalize cdnPath: ensure it starts with / and no trailing /
-  const normalizedPath = normalizeCdnPath(cdnPath || '/')
 
-  // Collect files
-  const { assetFiles, thumbnailFiles } = collectFiles(outputDir, name, normalizedPath, assetType || 'video')
+  // ── Mode 1: processed assets from output/ (existing behaviour) ────────────
+  if (name) {
+    const outputDir = join(cwd, 'output')
+    const normalizedPath = normalizeCdnPath(cdnPath || '/')
 
-  const results: string[] = []
-  const urls: string[] = []
+    const { assetFiles, thumbnailFiles } = collectFiles(outputDir, name, normalizedPath, assetType || 'video')
 
-  // Upload asset files to the asset provider
-  for (const f of assetFiles) {
-    const result = await uploadFile(f, provider, cwd)
-    results.push(result.msg)
-    if (result.url) urls.push(result.url)
+    const results: string[] = []
+    const urls: string[] = []
+
+    // Upload asset files to the asset provider
+    for (const f of assetFiles) {
+      const result = await uploadFile(f, provider, cwd)
+      results.push(result.msg)
+      if (result.url) urls.push(result.url)
+    }
+
+    // Upload thumbnail files to the thumbnail provider (may be same or different)
+    const effectiveThumbProvider = thumbProvider || provider
+    for (const f of thumbnailFiles) {
+      const result = await uploadFile(f, effectiveThumbProvider, cwd)
+      results.push(result.msg)
+      if (result.url) urls.push(result.url)
+    }
+
+    // Update manifest
+    await updateManifest(cwd, name, normalizedPath, assetType || 'video', urls)
+
+    return {
+      success: results.some(r => r.startsWith('✅')),
+      log: results.join('\n'),
+      urls,
+      url: urls[0],
+    }
   }
 
-  // Upload thumbnail files to the thumbnail provider (may be same or different)
-  const effectiveThumbProvider = thumbProvider || provider
-  for (const f of thumbnailFiles) {
-    const result = await uploadFile(f, effectiveThumbProvider, cwd)
+  // ── Mode 2: raw file upload from arbitrary path (CDN Upload page) ────────
+  if (filePath && remotePath) {
+    const results: string[] = []
+    const urls: string[] = []
+
+    const normalizedPath = normalizeCdnPath(remotePath || '/')
+    const rawDir = join(cwd, 'raw')
+    const resolvedLocal = resolve(cwd, filePath)
+    const allowedPrefix = rawDir.endsWith(sep) ? rawDir : rawDir + sep
+    if (!resolvedLocal.startsWith(allowedPrefix)) {
+      return { success: false, error: 'Invalid filePath (must be under raw/)' }
+    }
+    const localAbsolutePath = resolvedLocal
+
+    const baseName = filename || basename(filePath)
+    const ext = extname(baseName)
+    const ct = getContentType(ext)
+
+    // Build remote key similar to processed assets:
+    // "/" -> "<filename>"
+    // "/folder" -> "folder/<filename>"
+    const prefix = normalizedPath === '/' ? '' : `${normalizedPath.slice(1)}/`
+    const remoteKey = `${prefix}${baseName}`
+
+    const uploadFileDescriptor: UploadFile = {
+      local: localAbsolutePath,
+      remote: remoteKey,
+      ct,
+    }
+
+    const result = await uploadFile(uploadFileDescriptor, provider, cwd)
     results.push(result.msg)
     if (result.url) urls.push(result.url)
-  }
 
-  // Update manifest
-  await updateManifest(cwd, name, normalizedPath, assetType || 'video', urls)
+    return {
+      success: results.some(r => r.startsWith('✅')),
+      log: results.join('\n'),
+      urls,
+      url: urls[0],
+      // Echo back some context that callers might find useful
+      assetName: assetName || baseName,
+      remoteKey,
+    }
+  }
 
   return {
-    success: results.some(r => r.startsWith('✅')),
-    log: results.join('\n'),
-    urls,
+    success: false,
+    error: 'Missing name or filePath/remotePath',
   }
 })
 
@@ -164,10 +240,11 @@ async function uploadFile(
 
 // ── R2 Upload ────────────────────────────────────────────────────────────
 async function uploadFileToR2(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
-  const accountId = loadEnvVar('CLOUDFLARE_ACCOUNT_ID')
-  const apiToken = loadEnvVar('CLOUDFLARE_API_TOKEN')
-  const bucket = loadEnvVar('R2_BUCKET_NAME') || 'flylive-assets'
-  const customDomain = loadEnvVar('R2_CUSTOM_DOMAIN')
+  const r2Config = getCredentials('r2')
+  const accountId = r2Config.accountId || loadEnvVar('CLOUDFLARE_ACCOUNT_ID')
+  const apiToken = r2Config.apiToken || loadEnvVar('CLOUDFLARE_API_TOKEN')
+  const bucket = r2Config.bucket || loadEnvVar('R2_BUCKET_NAME') || 'flylive-assets'
+  const customDomain = r2Config.domain || loadEnvVar('R2_CUSTOM_DOMAIN')
 
   if (!accountId || !apiToken) {
     return { msg: '❌ Cloudflare Account ID or API Token not configured. Go to Settings.' }
@@ -201,8 +278,9 @@ async function uploadFileToR2(f: UploadFile, cwd: string): Promise<{ msg: string
 
 // ── ImageKit Upload ──────────────────────────────────────────────────────
 async function uploadFileToImageKit(f: UploadFile, cwd: string): Promise<{ msg: string, url?: string }> {
-  const privateKey = loadEnvVar('IMAGEKIT_PRIVATE_KEY')
-  const urlEndpoint = loadEnvVar('IMAGEKIT_URL_ENDPOINT')
+  const imagekitConfig = getCredentials('imagekit')
+  const privateKey = imagekitConfig.privateKey || loadEnvVar('IMAGEKIT_PRIVATE_KEY')
+  const urlEndpoint = imagekitConfig.endpoint || loadEnvVar('IMAGEKIT_URL_ENDPOINT')
 
   if (!privateKey) {
     return { msg: '❌ ImageKit private key not configured. Go to Settings.' }

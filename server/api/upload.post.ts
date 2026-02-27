@@ -3,6 +3,7 @@
 import { defineEventHandler, readMultipartFormData } from 'h3'
 import { writeFile, mkdir } from 'fs/promises'
 import { join, extname } from 'path'
+import { randomUUID } from 'crypto'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -22,8 +23,19 @@ export default defineEventHandler(async (event) => {
     const rawDir = join(process.cwd(), 'raw')
     await mkdir(rawDir, { recursive: true })
 
-    const safeName = (filePart.filename || 'upload.mp4')
+    const originalName = filePart.filename || 'upload.bin'
+    const originalExt = extname(originalName)
+    const safeExt = originalExt.replace(/[^a-zA-Z0-9.]/g, '') || ''
+    const originalBase = originalExt ? originalName.slice(0, -originalExt.length) : originalName
+
+    const safeBase = originalBase
       .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'upload'
+
+    // Always generate a unique filename to avoid collisions when uploading
+    // multiple files (including folder uploads with repeated basenames).
+    const safeName = `${safeBase}_${randomUUID().slice(0, 8)}${safeExt}`
 
     const destPath = join(rawDir, safeName)
 
@@ -32,6 +44,7 @@ export default defineEventHandler(async (event) => {
     return {
       success: true,
       filename: safeName,
+      originalName,
       size: filePart.data.length,
       path: destPath
     }

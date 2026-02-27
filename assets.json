@@ -57,6 +57,44 @@
         "webm": "tiger/Tiger/playable.webm"
       },
       "thumbnail": "https://assets.flyliveapp.com/tiger/Tiger/thumbnail.png"
+    },
+    {
+      "name": "Vip1-frame",
+      "cdnPath": "/",
+      "assetType": "svga",
+      "encoded_at": "2026-02-19T06:31:32.626Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/Vip1-frame/Vip1-frame.json"
+      ],
+      "formats": {
+        "json": "Vip1-frame/Vip1-frame.json"
+      }
+    },
+    {
+      "name": "dl_gift_393_e70732a890951d5c3bc95bd181a4de0a",
+      "cdnPath": "/",
+      "assetType": "svga",
+      "encoded_at": "2026-02-22T16:11:06.594Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/dl_gift_393_e70732a890951d5c3bc95bd181a4de0a/dl_gift_393_e70732a890951d5c3bc95bd181a4de0a.json"
+      ],
+      "formats": {
+        "json": "dl_gift_393_e70732a890951d5c3bc95bd181a4de0a/dl_gift_393_e70732a890951d5c3bc95bd181a4de0a.json"
+      }
+    },
+    {
+      "name": "lion",
+      "cdnPath": "/",
+      "assetType": "video",
+      "encoded_at": "2026-02-22T16:12:19.654Z",
+      "cdn_urls": [
+        "https://assets.flyliveapp.com/lion/playable.webm",
+        "https://assets.flyliveapp.com/lion/thumbnail.png"
+      ],
+      "formats": {
+        "webm": "lion/playable.webm"
+      },
+      "thumbnail": "https://assets.flyliveapp.com/lion/thumbnail.png"
     }
   ]
 }

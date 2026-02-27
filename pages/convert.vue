@@ -13,7 +13,7 @@
       <button class="tab" :class="{ active: activeTab === 'svga' }" @click="activeTab = 'svga'">
         <span class="tab-icon svga">✨</span> SVGA (→ JSON)
       </button>
-      <button class="tab" :class="{ active: activeTab === 'hevc' }" @click="activeTab = 'hevc'; loadCdnAssets()">
+      <button class="tab" :class="{ active: activeTab === 'hevc' }" @click="activeTab = 'hevc'">
         <span class="tab-icon hevc">🍎</span> HEVC (WebM → .mov)
       </button>
     </div>
@@ -280,81 +280,109 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- HEVC TAB                                                   -->
+    <!-- HEVC TAB — WebM upload → CI → direct .mov download          -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <div v-if="activeTab === 'hevc'">
-      <!-- Loading -->
-      <div v-if="hevcLoading" class="hevc-loading">
-        <span class="spinner" style="width:24px;height:24px;border-width:3px"></span>
-        <span style="color:var(--text-muted)">Loading CDN assets...</span>
+      <!-- Drop Zone -->
+      <div
+        class="drop-zone"
+        :class="{ 'drag-over': isDraggingHevc }"
+        @dragover.prevent="isDraggingHevc = true"
+        @dragleave.prevent="isDraggingHevc = false"
+        @drop.prevent="handleHevcDrop"
+        @click="hevcInput?.click()"
+      >
+        <div class="drop-zone-icon">🍎</div>
+        <div class="drop-zone-text">Drop WebM files here, or click to browse</div>
+        <div class="drop-zone-hint">Transparent WebM VP9 with alpha (for iOS HEVC)</div>
+        <input
+          ref="hevcInput"
+          type="file"
+          multiple
+          accept=".webm,.WEBM"
+          style="display:none"
+          @change="handleHevcFileSelect"
+        />
       </div>
 
-      <!-- Empty state -->
-      <div v-else-if="hevcAssets.length === 0" class="hevc-empty">
-        <div class="hevc-empty-icon">🍎</div>
-        <h3>No WebM assets on CDN</h3>
-        <p>Convert an MP4 → WebM and upload it to CDN first, then come back here to encode HEVC for iOS.</p>
-        <button class="btn btn-secondary" @click="activeTab = 'video'">Go to Video tab</button>
-      </div>
-
-      <!-- Asset list -->
-      <div v-else class="asset-queue">
+      <!-- HEVC Queue -->
+      <div v-if="hevcQueue.length > 0" class="asset-queue">
         <div class="queue-header">
-          <h2 class="card-title">{{ hevcAssets.length }} WebM asset{{ hevcAssets.length > 1 ? 's' : '' }} on CDN</h2>
-          <button class="btn btn-secondary btn-sm" @click="loadCdnAssets">🔄 Refresh</button>
+          <h2 class="card-title">{{ hevcQueue.length }} WebM file{{ hevcQueue.length > 1 ? 's' : '' }} queued</h2>
+          <div class="queue-actions">
+            <button class="btn btn-danger btn-sm" @click="hevcQueue = []" :disabled="isHevcProcessing">🗑️ Clear</button>
+            <button class="btn btn-primary btn-lg" @click="processHevcQueue" :disabled="isHevcProcessing || hevcQueue.length === 0">
+              <span v-if="isHevcProcessing" class="spinner" style="width:16px;height:16px;border-width:2px"></span>
+              {{ isHevcProcessing ? 'Processing...' : '🍎 Encode All to HEVC' }}
+            </button>
+          </div>
         </div>
 
-        <div v-for="asset in hevcAssets" :key="asset.name" class="asset-card hevc-card">
+        <div v-for="(item, idx) in hevcQueue" :key="item.id" class="asset-card hevc-card">
           <div class="asset-thumb hevc-thumb">🍎</div>
           <div class="asset-info">
-            <div class="asset-name">{{ asset.name }}</div>
-            <div class="asset-meta">
-              <span>{{ asset.assetType }} · uploaded {{ formatDate(asset.encoded_at) }}</span>
-            </div>
+            <div class="asset-name">{{ item.originalName }}</div>
+            <div class="asset-meta">WebM · {{ formatSize(item.size) }}</div>
 
-            <!-- CDN URLs -->
-            <div class="hevc-urls">
-              <div v-for="url in asset.cdn_urls" :key="url" class="hevc-url-chip">
-                <span class="hevc-url-ext" :class="getUrlExtClass(url)">{{ getUrlExt(url) }}</span>
-                <a :href="url" target="_blank" class="hevc-url-link">{{ shortenUrl(url) }}</a>
+            <!-- Config -->
+            <div class="asset-config">
+              <div class="form-group" style="margin-bottom:0;flex:1">
+                <label class="form-label">Output Name</label>
+                <input v-model="item.outputName" class="form-input" placeholder="e.g. confetti_burst" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;min-width:160px">
+                <label class="form-label">HEVC CDN Path</label>
+                <input v-model="item.cdnPath" class="form-input" placeholder="/hevc/direct" />
               </div>
             </div>
 
-            <!-- Has HEVC already? -->
-            <div v-if="hasHevc(asset)" class="hevc-done">
-              <span class="badge badge-emerald">✅ HEVC Available</span>
-              <a :href="getHevcUrl(asset)" target="_blank" class="btn btn-success btn-sm">⬇️ Download .mov</a>
+            <!-- Progress / Log -->
+            <div v-if="item.status !== 'queued'" style="margin-top:12px">
+              <div class="status-row">
+                <span class="badge" :class="statusBadge(item.status)">{{ item.status }}</span>
+                <span v-if="item.log" class="log-toggle" @click="item.showLog = !item.showLog">
+                  {{ item.showLog ? 'Hide' : 'Show' }} log
+                </span>
+              </div>
+              <div v-if="item.status === 'processing'" class="progress-bar">
+                <div class="progress-fill" :style="{ width: item.progress + '%' }"></div>
+              </div>
+              <div v-if="item.status === 'processing'" class="progress-text">{{ item.progressText || 'Encoding...' }}</div>
+              <div v-if="item.showLog && item.log" class="log-output">{{ item.log }}</div>
             </div>
 
-            <!-- Trigger HEVC -->
-            <div v-else class="hevc-trigger-section">
-              <div class="hevc-trigger-row">
-                <div class="form-group" style="margin-bottom:0;min-width:120px">
-                  <label class="form-label">CDN Provider</label>
-                  <select v-model="asset._provider" class="form-select">
-                    <option value="r2">Cloudflare R2</option>
-                    <option value="imagekit">ImageKit</option>
-                  </select>
+            <!-- Result -->
+            <div v-if="item.status === 'done'" class="result-card result-card-hevc">
+              <h3 class="result-title">✅ HEVC Ready</h3>
+              <div class="result-content">
+                <div class="result-details">
+                  <div class="result-name">{{ item.outputName }}.mov</div>
+                  <div class="result-actions-primary">
+                    <a
+                      v-if="item.downloadUrl"
+                      :href="item.downloadUrl"
+                      :download="`${item.outputName}.mov`"
+                      class="btn btn-success"
+                    >
+                      ⬇️ Download .mov
+                    </a>
+                    <a
+                      v-if="item.actionsUrl"
+                      :href="item.actionsUrl"
+                      target="_blank"
+                      class="btn btn-secondary btn-sm"
+                    >
+                      View on GitHub
+                    </a>
+                  </div>
                 </div>
-                <div class="form-group" style="margin-bottom:0;flex:1">
-                  <label class="form-label">CDN Path</label>
-                  <input v-model="asset._cdnPath" class="form-input" placeholder="/" />
-                </div>
-                <button
-                  class="btn btn-primary btn-sm hevc-encode-btn"
-                  :disabled="asset._encoding"
-                  @click="triggerHevcEncoding(asset)"
-                >
-                  <span v-if="asset._encoding" class="spinner" style="width:14px;height:14px;border-width:2px"></span>
-                  {{ asset._encoding ? 'Triggering...' : '🍎 Encode HEVC' }}
-                </button>
-              </div>
-              <div v-if="asset._triggered" class="hevc-triggered-msg">
-                <span class="badge badge-blue">⏳ Encoding on GitHub Actions</span>
-                <a v-if="asset._actionsUrl" :href="asset._actionsUrl" target="_blank" class="btn btn-secondary btn-sm">View on GitHub</a>
-                <p class="hevc-wait-hint">The macOS runner downloads the WebM, encodes HEVC, and uploads the .mov. Refresh this page in a few minutes to see the result.</p>
               </div>
             </div>
+          </div>
+
+          <!-- Remove -->
+          <div class="asset-actions">
+            <button class="btn btn-danger btn-sm" @click="hevcQueue.splice(idx, 1)" :disabled="isHevcProcessing">✕</button>
           </div>
         </div>
       </div>
@@ -594,7 +622,7 @@ const uploadToCdn = async (item: VideoItem | SvgaItem, type: 'video' | 'svga') =
   item.cdnUploading = false
 }
 
-// ── HEVC Trigger ─────────────────────────────────────────────────
+// ── HEVC Trigger (from Video tab) ────────────────────────────────
 const triggerHevc = async (item: VideoItem) => {
   try {
     const res = await $fetch<{ success: boolean; message?: string; actionsUrl?: string; error?: string }>('/api/trigger-hevc', {
@@ -616,103 +644,182 @@ const triggerHevc = async (item: VideoItem) => {
   }
 }
 
-// ── HEVC Tab ─────────────────────────────────────────────────────
-interface HevcAsset {
-  name: string
-  assetType: string
-  encoded_at: string
-  cdn_urls: string[]
-  formats: Record<string, string>
-  cdnPath?: string
-  thumbnail?: string
-  // UI-only fields
-  _provider: string
-  _cdnPath: string
-  _encoding: boolean
-  _triggered: boolean
-  _actionsUrl: string
+// ── HEVC Tab — WebM upload → CI → direct download ───────────────
+interface HevcItem {
+  id: number
+  file: File
+  originalName: string
+  size: number
+  outputName: string
+  status: 'queued' | 'uploading' | 'processing' | 'done' | 'error'
+  progress: number
+  progressText: string
+  log: string
+  showLog: boolean
+  cdnProvider: string
+  cdnPath: string
+  actionsUrl: string
+  downloadUrl: string
 }
 
-const hevcLoading = ref(false)
-const hevcAssets = ref<HevcAsset[]>([])
+const hevcInput = ref<HTMLInputElement>()
+const isDraggingHevc = ref(false)
+const isHevcProcessing = ref(false)
+const hevcQueue = ref<HevcItem[]>([])
 
-const loadCdnAssets = async () => {
-  hevcLoading.value = true
-  try {
-    const manifest = await $fetch<{ assets: Array<any> }>('/api/assets')
-    // Only show assets that have a WebM CDN URL
-    hevcAssets.value = (manifest.assets || [])
-      .filter((a: any) => (a.cdn_urls || []).some((u: string) => u.endsWith('.webm')))
-      .map((a: any) => ({
-        ...a,
-        _provider: 'r2',
-        _cdnPath: a.cdnPath || '/',
-        _encoding: false,
-        _triggered: false,
-        _actionsUrl: '',
-      }))
-  } catch (err: any) {
-    addToast?.('error', `Failed to load CDN assets: ${err.message}`)
+const handleHevcFileSelect = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (input.files) addHevcFiles(Array.from(input.files))
+  input.value = ''
+}
+
+const handleHevcDrop = (e: DragEvent) => {
+  isDraggingHevc.value = false
+  if (e.dataTransfer?.files) addHevcFiles(Array.from(e.dataTransfer.files))
+}
+
+const addHevcFiles = (files: File[]) => {
+  let added = 0
+  for (const file of files) {
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'webm') {
+      addToast?.('error', `Only .webm files. Got: .${ext}`)
+      continue
+    }
+    const baseName = file.name
+      .replace(/\.[^.]+$/, '')
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+
+    hevcQueue.value.push({
+      id: Date.now() + Math.random(),
+      file,
+      originalName: file.name,
+      size: file.size,
+      outputName: baseName,
+      status: 'queued',
+      progress: 0,
+      progressText: '',
+      log: '',
+      showLog: false,
+      cdnProvider: 'r2',
+      cdnPath: '/hevc/direct',
+      actionsUrl: '',
+      downloadUrl: '',
+    })
+    added++
   }
-  hevcLoading.value = false
+  if (added) addToast?.('info', `${added} WebM file(s) added`)
 }
 
-const hasHevc = (asset: HevcAsset): boolean => {
-  return (asset.cdn_urls || []).some((u: string) => u.endsWith('.mov'))
-}
-
-const getHevcUrl = (asset: HevcAsset): string => {
-  return (asset.cdn_urls || []).find((u: string) => u.endsWith('.mov')) || ''
-}
-
-const getUrlExt = (url: string): string => {
-  const ext = url.split('.').pop()?.toLowerCase() || ''
-  return '.' + ext
-}
-
-const getUrlExtClass = (url: string): string => {
-  const ext = url.split('.').pop()?.toLowerCase() || ''
-  if (ext === 'webm') return 'ext-blue'
-  if (ext === 'mov') return 'ext-emerald'
-  if (ext === 'png' || ext === 'jpg' || ext === 'webp') return 'ext-amber'
-  return 'ext-gray'
-}
-
-const shortenUrl = (url: string): string => {
-  try {
-    const u = new URL(url)
-    return u.pathname.length > 40 ? '...' + u.pathname.slice(-35) : u.pathname
-  } catch {
-    return url.length > 50 ? '...' + url.slice(-45) : url
+const processHevcQueue = async () => {
+  isHevcProcessing.value = true
+  for (const item of hevcQueue.value) {
+    if (item.status === 'done') continue
+    await processHevcItem(item)
   }
+  isHevcProcessing.value = false
 }
 
-const formatDate = (iso: string): string => {
+const processHevcItem = async (item: HevcItem) => {
   try {
-    const d = new Date(iso)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  } catch { return iso }
-}
+    item.status = 'uploading'
+    item.progress = 10
+    item.progressText = 'Uploading WebM to server...'
 
-const triggerHevcEncoding = async (asset: HevcAsset) => {
-  asset._encoding = true
-  try {
-    const res = await $fetch<{ success: boolean; message?: string; actionsUrl?: string; error?: string }>('/api/trigger-hevc', {
+    const formData = new FormData()
+    formData.append('file', item.file)
+    const uploadRes = await $fetch<{ success: boolean; filename: string; error?: string }>('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+    if (!uploadRes.success) throw new Error(uploadRes.error || 'Upload failed')
+
+    item.status = 'processing'
+    item.progress = 35
+    item.progressText = 'Uploading WebM to temporary CDN...'
+
+    const cdnRes = await $fetch<{ success: boolean; url?: string; urls?: string[]; error?: string; log?: string }>('/api/upload-cdn', {
       method: 'POST',
       body: {
-        assetName: asset.name,
-        cdnProvider: asset._provider,
-        cdnPath: asset._cdnPath || '/',
+        provider: item.cdnProvider,
+        filePath: `raw/${uploadRes.filename}`,
+        remotePath: item.cdnPath,
+        assetName: item.outputName,
+        filename: `${item.outputName}.webm`,
       },
     })
-    if (!res.success) throw new Error(res.error || 'Trigger failed')
-    asset._triggered = true
-    asset._actionsUrl = res.actionsUrl || ''
-    addToast?.('success', res.message || `HEVC encoding triggered for ${asset.name}!`)
+
+    if (!cdnRes.success) throw new Error(cdnRes.error || cdnRes.log || 'CDN upload failed')
+
+    const webmUrl = cdnRes.url || cdnRes.urls?.[0]
+    if (!webmUrl) throw new Error('CDN did not return a URL for the WebM file')
+
+    item.progress = 55
+    item.progressText = 'Triggering HEVC encoding on GitHub Actions...'
+
+    const triggerRes = await $fetch<{ success: boolean; message?: string; actionsUrl?: string; error?: string }>('/api/trigger-hevc', {
+      method: 'POST',
+      body: {
+        assetName: item.outputName,
+        webmUrl,
+        cdnProvider: item.cdnProvider,
+        cdnPath: item.cdnPath,
+      },
+    })
+
+    if (!triggerRes.success) throw new Error(triggerRes.error || 'HEVC trigger failed')
+
+    item.actionsUrl = triggerRes.actionsUrl || ''
+    item.progress = 70
+    item.progressText = 'Encoding HEVC on macOS runner...'
+    addToast?.('success', triggerRes.message || `HEVC encoding triggered for ${item.outputName}!`)
+
+    const ready = await pollHevcReady(item)
+    if (!ready) {
+      throw new Error('Timed out waiting for HEVC .mov to become available')
+    }
+
+    item.status = 'done'
+    item.progress = 100
+    item.progressText = 'HEVC ready. You can download the .mov file.'
   } catch (err: any) {
-    addToast?.('error', `HEVC trigger failed: ${err.message}`)
+    item.status = 'error'
+    item.progressText = err.message || 'Unknown error'
+    item.log += (item.log ? '\n\n' : '') + 'Error: ' + (err.message || 'Unknown')
+    addToast?.('error', `HEVC failed: ${item.outputName} — ${err.message}`)
   }
-  asset._encoding = false
+}
+
+const pollHevcReady = async (item: HevcItem, maxAttempts = 30, intervalMs = 10000): Promise<boolean> => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await $fetch<{ ready: boolean; url?: string; error?: string }>('/api/hevc-download-url', {
+        method: 'GET',
+        params: {
+          assetName: item.outputName,
+          cdnProvider: item.cdnProvider,
+          cdnPath: item.cdnPath,
+        },
+      })
+
+      if (res.ready && res.url) {
+        item.downloadUrl = res.url
+        return true
+      }
+
+      if (res.error) {
+        item.log += (item.log ? '\n\n' : '') + 'Poll error: ' + res.error
+      }
+    } catch (err: any) {
+      item.log += (item.log ? '\n\n' : '') + 'Poll error: ' + (err.message || 'Unknown')
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  return false
 }
 </script>
 

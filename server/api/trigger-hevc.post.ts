@@ -1,12 +1,20 @@
 // server/api/trigger-hevc.post.ts
-// Triggers GitHub Actions workflow to encode HEVC from an already-uploaded WebM
+// Triggers GitHub Actions workflow to encode HEVC from a WebM source.
+// Supports two modes:
+// 1) Manifest mode (existing): look up the WebM CDN URL from assets.json by assetName.
+// 2) Direct mode (new): accept an explicit webmUrl and skip manifest lookup.
 import { defineEventHandler, readBody, createError } from 'h3'
 import { loadEnvVar } from '../utils/env'
 import { readManifest } from '../utils/manifest'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { assetName, cdnProvider, cdnPath } = body
+  const { assetName, cdnProvider, cdnPath, webmUrl } = body as {
+    assetName?: string
+    cdnProvider?: string
+    cdnPath?: string
+    webmUrl?: string
+  }
 
   if (!assetName) {
     throw createError({ statusCode: 400, statusMessage: 'assetName is required' })
@@ -22,22 +30,27 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Find the WebM CDN URL from assets.json
-  const manifest = await readManifest()
-  const asset = manifest.assets.find(a => a.name === assetName)
-  if (!asset) {
-    throw createError({ statusCode: 404, statusMessage: `Asset "${assetName}" not found in manifest` })
-  }
+  // Resolve the WebM CDN URL to use for encoding.
+  // Prefer an explicit webmUrl if provided; otherwise fall back to manifest lookup.
+  let webmCdnUrl: string | undefined
 
-  // Find the WebM CDN URL
-  const webmCdnUrl = (asset.cdn_urls || []).find((url: string) =>
-    url.endsWith('.webm')
-  )
-  if (!webmCdnUrl) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'WebM not uploaded to CDN yet. Upload to CDN first, then trigger HEVC encoding.'
-    })
+  if (webmUrl) {
+    webmCdnUrl = webmUrl
+  } else {
+    // Manifest mode (existing behaviour)
+    const manifest = await readManifest()
+    const asset = manifest.assets.find((a) => a.name === assetName)
+    if (!asset) {
+      throw createError({ statusCode: 404, statusMessage: `Asset "${assetName}" not found in manifest` })
+    }
+
+    webmCdnUrl = (asset.cdn_urls || []).find((url: string) => url.endsWith('.webm'))
+    if (!webmCdnUrl) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'WebM not uploaded to CDN yet. Upload to CDN first, then trigger HEVC encoding.',
+      })
+    }
   }
 
   // Trigger GitHub Actions workflow
