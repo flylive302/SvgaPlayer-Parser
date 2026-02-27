@@ -69,5 +69,5 @@ export default defineEventHandler(async (event) => {
       error: err?.message || 'Failed to check HEVC URL',
     }
   }
-}
+})
 
