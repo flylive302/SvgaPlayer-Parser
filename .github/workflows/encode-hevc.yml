@@ -51,12 +51,14 @@ jobs:
         run: |
           mkdir -p "output/hevc/${{ inputs.asset_name }}"
           echo "⏳ Encoding HEVC with alpha via VideoToolbox..."
+          # Decode WebM with libvpx-vp9 so alpha is preserved (default VP9 decoder drops alpha)
           ffmpeg -y -hide_banner -loglevel info \
-            -i tmp/input.webm \
+            -c:v libvpx-vp9 -i tmp/input.webm \
             -c:v hevc_videotoolbox \
             -allow_sw 1 \
             -alpha_quality 0.75 \
             -tag:v hvc1 \
+            -movflags +faststart \
             -c:a aac -b:a 128k \
             "output/hevc/${{ inputs.asset_name }}/playable.mov"
           echo "✅ Encoded successfully"
